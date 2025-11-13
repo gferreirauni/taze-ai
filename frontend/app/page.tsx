@@ -6,6 +6,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import SummaryCard from '@/components/dashboard/SummaryCard'
 import StockList from '@/components/dashboard/StockList'
 import StockChart from '@/components/dashboard/StockChart'
+import AIInsights from '@/components/dashboard/AIInsights'
 
 interface Stock {
   symbol: string
@@ -109,14 +110,19 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Chart */}
+        {/* Chart and AI Analysis */}
         {selectedStock && (
-          <div className="mb-8">
-            <StockChart
-              data={selectedStock.history}
-              stockName={selectedStock.name}
-              stockSymbol={selectedStock.symbol}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2">
+              <StockChart
+                data={selectedStock.history}
+                stockName={selectedStock.name}
+                stockSymbol={selectedStock.symbol}
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <AIInsights stock={selectedStock} />
+            </div>
           </div>
         )}
 

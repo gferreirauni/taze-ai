@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from datetime import datetime, timedelta
 import random
 import uvicorn
@@ -182,6 +183,174 @@ async def get_portfolio_summary():
         "totalProfit": 15478.90,
         "profitPercentage": 14.07
     }
+
+# ==================== AI ANALYSIS ENDPOINTS ====================
+
+class AIAnalysisRequest(BaseModel):
+    symbol: str
+    currentPrice: float
+    dailyVariation: float
+    history: list
+
+def mock_ai_analysis(symbol: str, current_price: float, daily_variation: float, history: list):
+    """
+    Simula uma análise de IA realista baseada nos dados da ação
+    Em produção, isso seria substituído por uma chamada real à OpenAI GPT-4
+    """
+    
+    # Calcular métricas adicionais
+    prices = [h["value"] for h in history]
+    avg_price = sum(prices) / len(prices)
+    max_price = max(prices)
+    min_price = min(prices)
+    volatility = ((max_price - min_price) / avg_price) * 100
+    
+    # Calcular tendência (últimos 7 dias)
+    recent_prices = prices[-7:] if len(prices) >= 7 else prices
+    trend_up = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] > recent_prices[i-1])
+    trend_down = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] < recent_prices[i-1])
+    
+    # Determinar recomendação e análise
+    if daily_variation > 2:
+        recommendation = "COMPRA FORTE"
+        sentiment = "bullish"
+        analysis = f"""📈 **Análise Técnica Positiva**
+
+A ação {symbol} apresenta forte momentum de alta com variação de {daily_variation:+.2f}% no dia. 
+
+**Indicadores Técnicos:**
+- Preço atual: R$ {current_price:.2f} (acima da média móvel de R$ {avg_price:.2f})
+- Resistência identificada em R$ {max_price:.2f}
+- Suporte forte em R$ {min_price:.2f}
+- Volatilidade: {volatility:.1f}% (moderada)
+
+**Volume e Momentum:**
+A análise de volume indica forte interesse comprador. Tendência de alta confirmada com {trend_up} sessões positivas nos últimos 7 dias.
+
+**Fundamentos:**
+Empresa sólida do setor, com bons indicadores fundamentalistas. Expectativa de valorização no curto prazo.
+
+**Recomendação:** {recommendation} - Momento favorável para posições compradas."""
+
+    elif daily_variation > 0.5:
+        recommendation = "COMPRA"
+        sentiment = "bullish"
+        analysis = f"""✅ **Tendência de Alta Confirmada**
+
+{symbol} mantém trajetória positiva com variação de {daily_variation:+.2f}% hoje.
+
+**Análise Técnica:**
+- Preço: R$ {current_price:.2f} (tendência de alta)
+- Média móvel 30 dias: R$ {avg_price:.2f}
+- Range: R$ {min_price:.2f} - R$ {max_price:.2f}
+- Volatilidade controlada: {volatility:.1f}%
+
+**Projeção:**
+Sinais positivos indicam continuação do movimento de alta. {trend_up} de {len(recent_prices)} últimas sessões foram positivas.
+
+**Recomendação:** {recommendation} - Bom ponto de entrada para posições compradas."""
+
+    elif daily_variation > -0.5:
+        recommendation = "MANTER"
+        sentiment = "neutral"
+        analysis = f"""⚖️ **Movimento Lateral - Consolidação**
+
+{symbol} opera estável com leve variação de {daily_variation:+.2f}% no período.
+
+**Cenário Atual:**
+- Cotação: R$ {current_price:.2f}
+- Faixa de negociação: R$ {min_price:.2f} - R$ {max_price:.2f}
+- Volatilidade: {volatility:.1f}%
+
+**Análise:**
+Ação em fase de consolidação. Mercado aguarda catalisadores para definir próxima direção. Equilíbrio entre compradores e vendedores.
+
+**Padrão Técnico:**
+Movimento lateral pode preceder rompimento. Monitorar volumes para identificar direção.
+
+**Recomendação:** {recommendation} - Aguardar definição de tendência antes de novas posições."""
+
+    elif daily_variation > -2:
+        recommendation = "ATENÇÃO"
+        sentiment = "bearish"
+        analysis = f"""⚠️ **Correção Técnica em Andamento**
+
+{symbol} apresenta correção de {daily_variation:.2f}% hoje. Movimento dentro do esperado.
+
+**Análise de Risco:**
+- Preço atual: R$ {current_price:.2f}
+- Suporte importante em R$ {min_price:.2f}
+- Resistência em R$ {max_price:.2f}
+- Volatilidade aumentada: {volatility:.1f}%
+
+**Contexto:**
+Correção saudável após movimento de alta. {trend_down} sessões negativas recentes indicam realização de lucros.
+
+**Níveis Críticos:**
+Importante observar o suporte em R$ {min_price:.2f}. Rompimento pode acelerar queda.
+
+**Recomendação:** {recommendation} - Cautela. Aguardar estabilização antes de novas compras. Stop loss recomendado."""
+
+    else:
+        recommendation = "VENDA"
+        sentiment = "bearish"
+        analysis = f"""🔴 **Alerta de Risco - Pressão Vendedora**
+
+{symbol} em forte queda de {daily_variation:.2f}% no dia. Sinal de alerta acionado.
+
+**Indicadores de Risco:**
+- Preço: R$ {current_price:.2f} (tendência de baixa forte)
+- Rompeu suporte de R$ {min_price + (max_price - min_price) * 0.2:.2f}
+- Volatilidade elevada: {volatility:.1f}%
+- Pressão vendedora intensa
+
+**Análise Técnica:**
+{trend_down} das últimas {len(recent_prices)} sessões foram negativas. Momento desfavorável.
+
+**Gestão de Risco:**
+Recomenda-se proteção de posições. Mercado pode testar novos patamares de suporte.
+
+**Próximos Suportes:**
+R$ {min_price:.2f} (crítico) | R$ {min_price * 0.95:.2f} (extensão)
+
+**Recomendação:** {recommendation} - Reduzir exposição. Aguardar reversão de tendência."""
+
+    # Adicionar insights específicos por ação
+    sector_insights = {
+        "PETR4": "Setor de petróleo sensível a preços internacionais do barril.",
+        "VALE3": "Mineradora impactada por demanda chinesa e preço do minério de ferro.",
+        "ITUB4": "Setor financeiro beneficiado por ambiente de juros elevados.",
+        "WEGE3": "Indústria de motores elétricos com forte demanda internacional.",
+        "BBAS3": "Banco estatal com solidez e dividendos atrativos."
+    }
+    
+    sector_note = sector_insights.get(symbol, "Ação com boa liquidez no mercado brasileiro.")
+    
+    return {
+        "symbol": symbol,
+        "recommendation": recommendation,
+        "sentiment": sentiment,
+        "confidence": round(random.uniform(75, 95), 1),
+        "analysis": analysis,
+        "sectorInsight": sector_note,
+        "generatedAt": datetime.now().isoformat(),
+        "disclaimer": "Análise automatizada para fins educacionais. Não é recomendação de investimento."
+    }
+
+@app.post("/api/ai/analyze")
+async def analyze_stock(request: AIAnalysisRequest):
+    """
+    Endpoint de análise de ações com IA (versão mockada)
+    Em produção, integraria com OpenAI GPT-4
+    """
+    analysis = mock_ai_analysis(
+        request.symbol,
+        request.currentPrice,
+        request.dailyVariation,
+        request.history
+    )
+    
+    return analysis
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
