@@ -7,6 +7,7 @@ import SummaryCard from '@/components/dashboard/SummaryCard'
 import StockList from '@/components/dashboard/StockList'
 import StockChart from '@/components/dashboard/StockChart'
 import AIInsights from '@/components/dashboard/AIInsights'
+import ChatWidget from '@/components/dashboard/ChatWidget'
 
 interface Stock {
   symbol: string
@@ -138,6 +139,9 @@ export default function Dashboard() {
           <p>Dados atualizados automaticamente • Última atualização: {new Date().toLocaleTimeString('pt-BR')}</p>
         </div>
       </div>
+
+      {/* Chat Assistant (Floating) */}
+      <ChatWidget selectedStock={selectedStock || undefined} />
     </div>
   )
 }

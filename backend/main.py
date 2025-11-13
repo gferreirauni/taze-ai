@@ -2,8 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 import random
 import uvicorn
+import os
+from openai import OpenAI
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
+# Instanciar cliente OpenAI
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(
     title="Taze AI API",
@@ -351,6 +360,93 @@ async def analyze_stock(request: AIAnalysisRequest):
     )
     
     return analysis
+
+# ==================== CHAT ASSISTANT ENDPOINTS ====================
+
+class ChatMessage(BaseModel):
+    message: str
+    context: dict = None
+
+@app.post("/api/ai/chat")
+async def chat_with_assistant(request: ChatMessage):
+    """
+    Chat em tempo real com o Taze AI Assistant (OpenAI GPT-4)
+    """
+    try:
+        # System prompt poderoso para o assistente financeiro
+        system_prompt = """Você é o Taze AI, um analista financeiro sênior especialista em ações da B3 (Bolsa de Valores brasileira).
+
+**Sua Personalidade:**
+- Profissional, mas acessível e amigável
+- Conciso e direto ao ponto
+- Usa dados técnicos e fundamentalistas para justificar opiniões
+- Responde em Português do Brasil
+- Usa emojis ocasionalmente para deixar a conversa mais leve
+
+**Suas Habilidades:**
+- Análise técnica (suporte, resistência, médias móveis, volume)
+- Análise fundamentalista (P/L, dividend yield, ROE)
+- Interpretação de notícias do mercado
+- Gestão de risco e estratégias de investimento
+- Conhecimento profundo sobre empresas da B3
+
+**Formato de Resposta:**
+- Use Markdown para formatação (negrito, listas, etc.)
+- Seja objetivo: máximo 200 palavras por resposta
+- Sempre termine com uma recomendação clara ou próximo passo
+
+**Importante:**
+- Você NÃO é uma recomendação formal de investimento
+- Sempre lembre o usuário de fazer sua própria análise
+- Use disclaimer quando apropriado: "Esta é uma análise educacional, não recomendação de compra/venda"
+"""
+
+        # Construir mensagem do usuário com contexto (se fornecido)
+        user_message = request.message
+        
+        if request.context:
+            # Adicionar contexto da ação que o usuário está visualizando
+            context_info = f"""
+**Contexto da Tela do Usuário:**
+- Ação: {request.context.get('symbol', 'N/A')} - {request.context.get('name', 'N/A')}
+- Preço Atual: R$ {request.context.get('currentPrice', 0):.2f}
+- Variação Diária: {request.context.get('dailyVariation', 0):+.2f}%
+- Setor: {request.context.get('sector', 'N/A')}
+
+O usuário está visualizando esta ação no momento. Use essas informações para contextualizar sua resposta.
+
+**Pergunta do Usuário:**
+{user_message}
+"""
+            user_message = context_info
+        
+        # Chamar OpenAI GPT-4
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",  # ou gpt-3.5-turbo para economizar
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=500,
+            temperature=0.7,
+        )
+        
+        assistant_reply = response.choices[0].message.content
+        
+        return {
+            "success": True,
+            "message": assistant_reply,
+            "model": "gpt-4o",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Desculpe, ocorreu um erro: {str(e)}",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
