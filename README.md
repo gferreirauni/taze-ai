@@ -1,6 +1,29 @@
 # 🚀 Taze AI - Dashboard Inteligente para Investidores da B3
 
-Dashboard inteligente alimentado por IA para análise de investimentos na Bolsa Brasileira (B3).
+<div align="center">
+
+![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38B2AC?style=for-the-badge&logo=tailwind-css)
+
+**Dashboard inteligente alimentado por IA para análise de investimentos na Bolsa Brasileira (B3)**
+
+[Documentação](#-estrutura-do-projeto) • [Começar](#-como-rodar-o-projeto) • [Próximos Passos](NEXT_STEPS.md)
+
+</div>
+
+---
+
+## ✨ Features Principais
+
+- 📊 **Dashboard Interativo** - Visualize dados do mercado em tempo real
+- 🤖 **Análise com IA** - Recomendações inteligentes usando GPT-4
+- 📈 **Gráficos Avançados** - Histórico de preços e análises técnicas
+- 💼 **Gestão de Carteira** - Acompanhe seus investimentos
+- 🔔 **Alertas Personalizados** - Notificações de preços e oportunidades
+- 🎯 **Dados da B3** - Informações atualizadas do mercado brasileiro
 
 ## 📋 Stack Tecnológica
 
