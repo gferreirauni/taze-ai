@@ -1,12 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, TrendingUp, Activity } from 'lucide-react'
+import { Activity, Newspaper, TrendingUp, Wallet } from 'lucide-react'
 import Sidebar from '@/components/dashboard/Sidebar'
 import SummaryCard from '@/components/dashboard/SummaryCard'
 import StockList from '@/components/dashboard/StockList'
-import StockChart from '@/components/dashboard/StockChart'
-import AIInsights from '@/components/dashboard/AIInsights'
 import ChatWidget from '@/components/dashboard/ChatWidget'
 
 interface Stock {
@@ -25,26 +23,36 @@ interface PortfolioSummary {
   stocksCount: number
 }
 
+interface NewsItem {
+  title: string
+  link: string
+  author: string
+  time_ago: string
+  source: string
+}
+
 export default function Dashboard() {
   const [stocks, setStocks] = useState<Stock[]>([])
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null)
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
+  const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [newsLoading, setNewsLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        // Buscar ações
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
         const stocksResponse = await fetch('http://localhost:8000/api/stocks')
+        
+        if (!stocksResponse.ok) {
+          throw new Error(`Erro: ${stocksResponse.status}`)
+        }
+        
         const stocksData = await stocksResponse.json()
         setStocks(stocksData.stocks)
-        
-        // Selecionar primeira ação por padrão
-        if (stocksData.stocks.length > 0) {
-          setSelectedStock(stocksData.stocks[0])
-        }
 
-        // Buscar resumo da carteira
         const portfolioResponse = await fetch('http://localhost:8000/api/portfolio/summary')
         const portfolioData = await portfolioResponse.json()
         setPortfolio(portfolioData)
@@ -55,11 +63,31 @@ export default function Dashboard() {
       }
     }
 
+    async function fetchNews() {
+      try {
+        const newsResponse = await fetch('http://localhost:8000/api/news')
+        const newsData = await newsResponse.json()
+        
+        if (newsData.news && newsData.news.length > 0) {
+          setNews(newsData.news.slice(0, 5))  // Mostrar apenas 5 notícias
+        }
+      } catch (error) {
+        console.error('Erro ao buscar notícias:', error)
+      } finally {
+        setNewsLoading(false)
+      }
+    }
+
     fetchData()
+    fetchNews()
     
-    // Atualizar dados a cada 30 segundos
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    const stocksInterval = setInterval(fetchData, 30000)
+    const newsInterval = setInterval(fetchNews, 900000)  // 15 minutos
+    
+    return () => {
+      clearInterval(stocksInterval)
+      clearInterval(newsInterval)
+    }
   }, [])
 
   if (loading) {
@@ -75,10 +103,8 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content */}
       <div className="ml-64 flex-1 p-8">
         {/* Header */}
         <div className="mb-8">
@@ -105,27 +131,95 @@ export default function Dashboard() {
           <SummaryCard
             title="Ações Monitoradas"
             value={stocks.length.toString()}
-            change="5 empresas"
+            change="5 empresas da B3"
             changeType="neutral"
             icon={Activity}
           />
         </div>
 
-        {/* Chart and AI Analysis */}
-        {selectedStock && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div className="lg:col-span-2">
-              <StockChart
-                data={selectedStock.history}
-                stockName={selectedStock.name}
-                stockSymbol={selectedStock.symbol}
-              />
-            </div>
-            <div className="lg:col-span-1">
-              <AIInsights stock={selectedStock} />
+        {/* Portfolio Chart */}
+        {portfolio && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
+            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              Evolução do Patrimônio (30 dias)
+            </h2>
+            <div className="h-64 flex items-center justify-center text-zinc-500">
+              <div className="text-center">
+                <TrendingUp size={48} className="mx-auto mb-4 opacity-50" />
+                <p>Gráfico de evolução será implementado em breve</p>
+                <p className="text-sm mt-2">Conecte sua corretora para visualizar histórico</p>
+              </div>
             </div>
           </div>
         )}
+
+        {/* News Section */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Newspaper className="w-5 h-5 text-blue-500" />
+            Últimas Notícias Relevantes
+            <span className="text-xs text-zinc-500 font-normal ml-auto">via Investing.com</span>
+          </h2>
+          
+          {newsLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex gap-4 p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                  <div className="flex-shrink-0 w-16 h-16 bg-zinc-700 rounded-lg animate-pulse"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 bg-zinc-700 rounded animate-pulse w-3/4"></div>
+                    <div className="h-4 bg-zinc-700 rounded animate-pulse w-full"></div>
+                    <div className="h-3 bg-zinc-700 rounded animate-pulse w-1/2"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : news.length > 0 ? (
+            <div className="space-y-4">
+              {news.map((item, index) => (
+                <a
+                  key={index}
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex gap-4 p-4 bg-zinc-800/50 rounded-lg border border-zinc-700 hover:bg-zinc-800 hover:border-blue-500/50 transition-all cursor-pointer group"
+                >
+                  <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Newspaper className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-white mb-1 group-hover:text-blue-400 transition-colors line-clamp-2">
+                      {item.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <span>📰 {item.author}</span>
+                      <span>•</span>
+                      <span>{item.time_ago}</span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+
+              <div className="text-center mt-4">
+                <a
+                  href="https://br.investing.com/analysis/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm font-medium"
+                >
+                  <Newspaper size={16} />
+                  Ver todas as notícias no Investing.com
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-zinc-500">
+              <Newspaper size={48} className="mx-auto mb-4 opacity-50" />
+              <p>Nenhuma notícia disponível no momento</p>
+            </div>
+          )}
+        </div>
 
         {/* Stock List */}
         <StockList
@@ -140,7 +234,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Chat Assistant (Floating) */}
+      {/* Chat Assistant */}
       <ChatWidget selectedStock={selectedStock || undefined} />
     </div>
   )

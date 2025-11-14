@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bot, TrendingUp, TrendingDown, Minus, FileText, Sparkles } from 'lucide-react'
+import { Bot, TrendingUp, TrendingDown, Minus, FileText, Sparkles, RefreshCw } from 'lucide-react'
 
 interface Stock {
   symbol: string
@@ -29,17 +29,39 @@ interface AIInsightsProps {
 export default function AIInsights({ stock }: AIInsightsProps) {
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
+  const [cached, setCached] = useState(false)
 
+  // Buscar análise em cache ao carregar
   useEffect(() => {
     if (stock) {
-      analyzeStock()
+      checkCachedAnalysis()
     }
   }, [stock.symbol])
 
-  const analyzeStock = async () => {
+  const checkCachedAnalysis = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/ai/analysis/${stock.symbol}`)
+      const data = await response.json()
+      
+      if (data.cached && data.analysis) {
+        setAnalysis(data.analysis)
+        setCached(true)
+      } else {
+        setAnalysis(null)
+        setCached(false)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar análise em cache:', error)
+      setAnalysis(null)
+      setCached(false)
+    }
+  }
+
+  const generateAnalysis = async () => {
     setLoading(true)
+    setCached(false)
     
-    // Simular delay de 1.5s para parecer que está processando
+    // Simular delay para UX
     await new Promise(resolve => setTimeout(resolve, 1500))
     
     try {
@@ -52,130 +74,139 @@ export default function AIInsights({ stock }: AIInsightsProps) {
           symbol: stock.symbol,
           currentPrice: stock.currentPrice,
           dailyVariation: stock.dailyVariation,
-          history: stock.history
-        })
+          history: stock.history,
+        }),
       })
-      
+
       const data = await response.json()
       setAnalysis(data)
+      setCached(true)
     } catch (error) {
-      console.error('Erro ao analisar ação:', error)
+      console.error('Erro ao gerar análise:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const getRecommendationColor = (recommendation: string) => {
-    if (recommendation.includes('COMPRA')) return 'text-emerald-500 bg-emerald-500/10'
-    if (recommendation.includes('VENDA')) return 'text-red-500 bg-red-500/10'
-    if (recommendation.includes('ATENÇÃO')) return 'text-orange-500 bg-orange-500/10'
+  const getRecommendationColor = (rec: string) => {
+    if (rec.includes('COMPRA')) return 'text-emerald-500 bg-emerald-500/10'
+    if (rec.includes('VENDA')) return 'text-red-500 bg-red-500/10'
+    if (rec.includes('ATENÇÃO')) return 'text-orange-500 bg-orange-500/10'
     return 'text-blue-500 bg-blue-500/10'
-  }
-
-  const getSentimentIcon = (sentiment: string) => {
-    if (sentiment === 'bullish') return <TrendingUp className="w-5 h-5 text-emerald-500" />
-    if (sentiment === 'bearish') return <TrendingDown className="w-5 h-5 text-red-500" />
-    return <Minus className="w-5 h-5 text-zinc-400" />
   }
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Análise de IA</h2>
-            <p className="text-sm text-zinc-500">Powered by Taze AI Engine</p>
-          </div>
+        <div className="flex items-center gap-2">
+          <Bot className="w-5 h-5 text-purple-500" />
+          <h2 className="text-xl font-bold text-white">Análise de IA</h2>
         </div>
-        {analysis && (
-          <div className="flex items-center gap-2">
-            {getSentimentIcon(analysis.sentiment)}
-            <span className="text-sm text-zinc-400">
-              Confiança: {analysis.confidence}%
-            </span>
-          </div>
-        )}
+        <span className="text-xs text-zinc-500">Powered by Taze AI Engine</span>
       </div>
 
       {/* Loading State */}
       {loading && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 mb-4">
-            <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
-            <span className="text-sm text-purple-400 font-medium">
-              Analisando {stock.symbol} com IA...
-            </span>
-          </div>
-          
-          {/* Skeleton Loader */}
-          <div className="space-y-3">
-            <div className="h-4 bg-zinc-800 rounded animate-pulse"></div>
-            <div className="h-4 bg-zinc-800 rounded w-5/6 animate-pulse"></div>
-            <div className="h-4 bg-zinc-800 rounded w-4/6 animate-pulse"></div>
-            <div className="h-32 bg-zinc-800 rounded animate-pulse mt-4"></div>
-            <div className="h-4 bg-zinc-800 rounded w-3/6 animate-pulse"></div>
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <Bot size={48} className="text-purple-400 animate-pulse" />
+          <p className="mt-4 text-lg font-semibold text-zinc-300">
+            Analisando {stock.symbol} com IA...
+          </p>
+          <div className="mt-4 w-full space-y-2">
+            <div className="h-4 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-4 bg-zinc-800 rounded animate-pulse w-5/6" />
+            <div className="h-4 bg-zinc-800 rounded animate-pulse w-4/5" />
+            <div className="h-4 bg-zinc-800 rounded animate-pulse w-11/12" />
+            <div className="h-4 bg-zinc-800 rounded animate-pulse w-3/4" />
           </div>
         </div>
       )}
 
-      {/* Analysis Content */}
+      {/* No Analysis State */}
+      {!loading && !analysis && (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <Sparkles size={48} className="text-zinc-700 mb-4" />
+          <h3 className="text-lg font-semibold text-white mb-2">Gerar Análise de IA</h3>
+          <p className="text-zinc-500 mb-6 text-sm">
+            Clique no botão abaixo para gerar uma análise detalhada de {stock.symbol} com IA.
+          </p>
+          <button
+            onClick={generateAnalysis}
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:scale-105 transition-transform duration-200 flex items-center gap-2"
+          >
+            <Sparkles size={18} />
+            Gerar Análise
+          </button>
+          <p className="text-xs text-zinc-600 mt-4">
+            💡 A análise é salva por 24h para economizar tokens
+          </p>
+        </div>
+      )}
+
+      {/* Analysis Display */}
       {!loading && analysis && (
-        <div className="space-y-4">
+        <>
           {/* Recommendation Badge */}
-          <div className="flex items-center gap-3">
-            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${getRecommendationColor(analysis.recommendation)}`}>
-              {analysis.recommendation}
-            </span>
-            <span className="text-xs text-zinc-500">
-              Gerado em {new Date(analysis.generatedAt).toLocaleTimeString('pt-BR')}
-            </span>
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-4 ${getRecommendationColor(analysis.recommendation)}`}>
+            {analysis.recommendation.includes('COMPRA') && <TrendingUp size={18} />}
+            {analysis.recommendation.includes('VENDA') && <TrendingDown size={18} />}
+            {analysis.recommendation.includes('MANTER') && <Minus size={18} />}
+            <span className="font-bold text-sm">{analysis.recommendation}</span>
+            <span className="text-xs opacity-70">• {analysis.confidence}% confiança</span>
           </div>
 
+          {cached && (
+            <div className="flex items-center gap-2 mb-4 text-xs text-emerald-500">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+              Análise do dia em cache (economizando tokens)
+            </div>
+          )}
+
           {/* Analysis Text */}
-          <div className="prose prose-invert prose-sm max-w-none">
-            <div className="text-zinc-300 leading-relaxed whitespace-pre-line text-sm">
+          <div className="prose prose-invert max-w-none mb-4">
+            <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
               {analysis.analysis}
             </div>
           </div>
 
-          {/* Sector Insight */}
-          <div className="mt-4 p-4 bg-zinc-800/50 rounded-lg border border-zinc-700">
-            <p className="text-sm text-zinc-400">
-              <span className="font-semibold text-emerald-400">Contexto do Setor:</span> {analysis.sectorInsight}
-            </p>
+          {/* Sector Context */}
+          <div className="bg-zinc-800/50 rounded-lg p-4 mb-4 border border-zinc-700">
+            <p className="text-xs font-semibold text-emerald-500 mb-1">Contexto do Setor:</p>
+            <p className="text-sm text-zinc-400">{analysis.sectorInsight}</p>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 mt-6">
+          <div className="flex gap-3">
             <button
-              onClick={analyzeStock}
-              className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              onClick={generateAnalysis}
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Sparkles className="w-4 h-4" />
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               Atualizar Análise
             </button>
             <button
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-              title="Em breve"
+              className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
             >
-              <FileText className="w-4 h-4" />
+              <FileText size={16} />
               Relatório Completo
             </button>
           </div>
 
           {/* Disclaimer */}
-          <div className="mt-4 p-3 bg-zinc-950 rounded-lg border border-zinc-800">
-            <p className="text-xs text-zinc-500 leading-relaxed">
+          <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+            <p className="text-xs text-orange-400">
               ⚠️ {analysis.disclaimer}
             </p>
           </div>
-        </div>
+
+          {/* Generated At */}
+          <p className="text-xs text-zinc-600 mt-3 text-center">
+            Gerada em: {new Date(analysis.generatedAt).toLocaleString('pt-BR')}
+          </p>
+        </>
       )}
     </div>
   )
 }
-
