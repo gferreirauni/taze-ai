@@ -13,6 +13,7 @@ interface Stock {
   sector: string
   currentPrice: number
   dailyVariation: number
+  monthVariation?: number
   history: { date: string; value: number }[]
 }
 

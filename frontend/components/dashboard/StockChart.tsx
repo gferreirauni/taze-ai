@@ -11,19 +11,23 @@ interface StockChartProps {
   data: HistoryData[]
   stockName: string
   stockSymbol: string
+  currentPrice?: number
+  monthVariation?: number
 }
 
-export default function StockChart({ data, stockName, stockSymbol }: StockChartProps) {
+export default function StockChart({ data, stockName, stockSymbol, currentPrice, monthVariation }: StockChartProps) {
   // Formatar data para exibição (mostrar apenas dia/mês)
   const formattedData = data.map(item => ({
     ...item,
     displayDate: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
   }))
 
-  // Calcular se está em alta ou baixa
-  const firstValue = data[0]?.value || 0
-  const lastValue = data[data.length - 1]?.value || 0
-  const isPositive = lastValue >= firstValue
+  // Usar currentPrice do backend ou último valor do histórico
+  const lastValue = currentPrice || data[data.length - 1]?.value || 0
+  
+  // Usar monthVariation do backend ou calcular como fallback
+  const variation = monthVariation !== undefined ? monthVariation : 0
+  const isPositive = variation >= 0
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
@@ -38,7 +42,7 @@ export default function StockChart({ data, stockName, stockSymbol }: StockChartP
               R$ {lastValue.toFixed(2)}
             </p>
             <p className={`text-sm font-semibold ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isPositive ? '+' : ''}{((lastValue - firstValue) / firstValue * 100).toFixed(2)}% (30d)
+              {isPositive ? '+' : ''}{variation.toFixed(2)}% (30d)
             </p>
           </div>
         </div>

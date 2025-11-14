@@ -108,12 +108,17 @@ def generate_mock_stock_data():
         prev_price = history[-2]["value"]
         daily_variation = ((last_price - prev_price) / prev_price) * 100
         
+        # Variação de 30 dias (mock)
+        first_price = history[0]["value"]
+        month_variation = ((last_price - first_price) / first_price) * 100
+        
         stocks_data.append({
             "symbol": stock["symbol"],
             "name": stock["name"],
             "sector": stock["sector"],
             "currentPrice": round(last_price, 2),
             "dailyVariation": round(daily_variation, 2),
+            "monthVariation": round(month_variation, 2),
             "history": history
         })
         
@@ -171,13 +176,36 @@ def fetch_real_stock_data():
             history = []
             historical_data = stock_data.get("historicalDataPrice", [])
             
+            # Variação mensal (30 dias)
+            month_variation = 0
+            
             if historical_data:
-                # Pegar últimos 30 dias
-                for item in historical_data[-30:]:
+                # Pegar TODOS os dados históricos (até 3 meses)
+                for item in historical_data:
                     history.append({
                         "date": datetime.fromtimestamp(item["date"]).strftime("%Y-%m-%d"),
                         "value": round(float(item["close"]), 2)
                     })
+                
+                # IMPORTANTE: Usar o último valor do histórico como currentPrice
+                # Isso garante consistência entre lista e gráfico
+                if len(history) > 0:
+                    current_price = history[-1]["value"]
+                    
+                    # Recalcular variação diária com base no histórico
+                    if len(history) >= 2:
+                        prev_price = history[-2]["value"]
+                        daily_variation = ((current_price - prev_price) / prev_price) * 100
+                    
+                    # Calcular variação de 30 dias corretamente
+                    if len(history) >= 30:
+                        price_30_days_ago = history[-30]["value"]
+                        month_variation = ((current_price - price_30_days_ago) / price_30_days_ago) * 100
+                    elif len(history) >= 7:  # Fallback para 7 dias se não tiver 30
+                        price_7_days_ago = history[-7]["value"]
+                        month_variation = ((current_price - price_7_days_ago) / price_7_days_ago) * 100
+                    else:
+                        month_variation = daily_variation  # Se tiver menos, usar daily
             
             # Nome e setor
             long_name = stock_data.get("longName", stock_data.get("shortName", symbol))
@@ -200,6 +228,7 @@ def fetch_real_stock_data():
                 "sector": sector,
                 "currentPrice": round(float(current_price), 2),
                 "dailyVariation": round(float(daily_variation), 2),
+                "monthVariation": round(float(month_variation), 2),
                 "history": history
             })
             
@@ -284,25 +313,50 @@ async def get_news():
             author = item.find("author")
             
             # Calcular tempo relativo
+            time_ago = "Recente"
             if pub_date is not None and pub_date.text:
                 try:
-                    # Formato: "Aug 08, 2025 14:08 GMT"
-                    pub_datetime = datetime.strptime(pub_date.text, "%b %d, %Y %H:%M GMT")
-                    now = datetime.utcnow()
-                    diff = now - pub_datetime
+                    # Tentar múltiplos formatos de data
+                    pub_text = pub_date.text.strip()
                     
-                    if diff.days > 0:
-                        time_ago = f"{diff.days} dia{'s' if diff.days > 1 else ''} atrás"
-                    elif diff.seconds >= 3600:
-                        hours = diff.seconds // 3600
-                        time_ago = f"{hours} hora{'s' if hours > 1 else ''} atrás"
-                    else:
-                        minutes = diff.seconds // 60
-                        time_ago = f"{minutes} minuto{'s' if minutes > 1 else ''} atrás"
-                except:
+                    # Lista de formatos possíveis do RSS
+                    date_formats = [
+                        "%a, %d %b %Y %H:%M:%S %z",  # "Mon, 14 Nov 2025 10:00:00 +0000"
+                        "%a, %d %b %Y %H:%M:%S GMT",  # "Mon, 14 Nov 2025 10:00:00 GMT"
+                        "%d %b %Y %H:%M GMT",         # "14 Nov 2025 10:00 GMT"
+                        "%b %d, %Y %H:%M GMT",        # "Nov 14, 2025 10:00 GMT"
+                    ]
+                    
+                    pub_datetime = None
+                    for fmt in date_formats:
+                        try:
+                            pub_datetime = datetime.strptime(pub_text, fmt)
+                            # Se tinha timezone, converter para naive
+                            if pub_datetime.tzinfo:
+                                pub_datetime = pub_datetime.replace(tzinfo=None)
+                            break
+                        except ValueError:
+                            continue
+                    
+                    if pub_datetime:
+                        now = datetime.utcnow()
+                        diff = now - pub_datetime
+                        
+                        # Prevenir datas futuras (timezone issues)
+                        if diff.total_seconds() < 0:
+                            diff = timedelta(seconds=0)
+                        
+                        if diff.days > 0:
+                            time_ago = f"{diff.days} dia{'s' if diff.days > 1 else ''} atrás"
+                        elif diff.seconds >= 3600:
+                            hours = diff.seconds // 3600
+                            time_ago = f"{hours} hora{'s' if hours > 1 else ''} atrás"
+                        else:
+                            minutes = max(1, diff.seconds // 60)
+                            time_ago = f"{minutes} minuto{'s' if minutes > 1 else ''} atrás"
+                except Exception as e:
+                    print(f"[NEWS PARSE] Erro ao parsear data: {pub_text} - {str(e)}")
                     time_ago = "Recente"
-            else:
-                time_ago = "Recente"
             
             news_items.append({
                 "title": title.text if title is not None else "Sem título",

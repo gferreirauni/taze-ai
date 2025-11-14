@@ -12,6 +12,7 @@ interface Stock {
   sector: string
   currentPrice: number
   dailyVariation: number
+  monthVariation: number
   history: { date: string; value: number }[]
 }
 
@@ -136,6 +137,8 @@ export default function AnalisesPage() {
                   data={selectedStock.history}
                   stockName={selectedStock.name}
                   stockSymbol={selectedStock.symbol}
+                  currentPrice={selectedStock.currentPrice}
+                  monthVariation={selectedStock.monthVariation}
                 />
 
                 {/* Análise de IA */}
