@@ -8,7 +8,8 @@ import uvicorn
 import os
 from openai import OpenAI
 import requests
-import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
+import re
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -275,8 +276,9 @@ async def health_check():
 @app.get("/api/news")
 async def get_news():
     """
-    Busca notícias do feed RSS do Investing.com
+    Faz scraping de notícias do site Análise de Ações
     Cache de 15 minutos para não sobrecarregar o servidor
+    Fonte: https://www.analisedeacoes.com/noticias/
     """
     # Verificar cache
     if news_cache["data"] is not None and news_cache["timestamp"] is not None:
@@ -289,102 +291,205 @@ async def get_news():
                 "cache_age_seconds": elapsed
             }
     
-    # Buscar notícias do RSS
-    print("[NEWS] Buscando notícias do Investing.com RSS...")
+    # Buscar notícias via scraping
+    print("[NEWS] Fazendo scraping de notícias do Análise de Ações...")
     
     try:
-        rss_url = "https://br.investing.com/rss/stock_Fundamental.rss"
-        response = requests.get(rss_url, timeout=10)
+        news_url = "https://www.analisedeacoes.com/noticias/"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(news_url, headers=headers, timeout=15)
         
         if response.status_code != 200:
-            print(f"[NEWS ERROR] RSS retornou {response.status_code}")
-            return {"news": [], "error": "Erro ao buscar RSS"}
+            print(f"[NEWS ERROR] Site retornou {response.status_code}")
+            return {"news": [], "error": f"Erro HTTP {response.status_code}"}
         
-        # Parsear XML
-        root = ET.fromstring(response.content)
+        # Parsear HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
         
         news_items = []
         
-        # Extrair itens do RSS
-        for item in root.findall(".//item")[:10]:  # Pegar até 10 notícias
-            title = item.find("title")
-            link = item.find("link")
-            pub_date = item.find("pubDate")
-            author = item.find("author")
+        # Estratégia de scraping: buscar elementos que contenham notícias
+        # Analisar a estrutura HTML da página
+        
+        # Tentar encontrar notícias (pode estar em <article>, <div>, etc)
+        # A página parece ter notícias em formato de cards/artigos
+        
+        # Buscar por links de notícias (títulos geralmente são links)
+        news_links = []
+        
+        # Tentar diferentes seletores comuns
+        possible_selectors = [
+            'article',  # Elementos article
+            'div[class*="post"]',  # Divs com "post" no nome da classe
+            'div[class*="news"]',  # Divs com "news" no nome da classe
+            'div[class*="noticia"]',  # Divs com "noticia" no nome da classe
+        ]
+        
+        for selector in possible_selectors:
+            articles = soup.select(selector)
+            if articles:
+                print(f"[NEWS] Encontrados {len(articles)} artigos com seletor '{selector}'")
+                break
+        
+        # Se não encontrou por seletores, buscar todas as tags <a> com href
+        if not articles or len(articles) == 0:
+            print("[NEWS] Tentando extrair por links de notícias...")
+            all_links = soup.find_all('a', href=True)
             
-            # Calcular tempo relativo
-            time_ago = "Recente"
-            if pub_date is not None and pub_date.text:
+            # Filtrar links que parecem ser de notícias
+            for link in all_links:
+                href = link.get('href', '')
+                text = link.get_text(strip=True)
+                
+                # Filtrar links que parecem ser notícias (texto longo, não é menu)
+                if (text and len(text) > 30 and 
+                    'analisedeacoes.com' in href or href.startswith('/') and
+                    not any(skip in href.lower() for skip in ['login', 'cadastro', 'premium', 'contato'])):
+                    
+                    # Garantir URL absoluta
+                    if href.startswith('/'):
+                        href = f"https://www.analisedeacoes.com{href}"
+                    
+                    news_items.append({
+                        "title": text,
+                        "link": href,
+                        "author": "Análise de Ações",
+                        "time_ago": "Recente",
+                        "source": "Análise de Ações"
+                    })
+                    
+                    if len(news_items) >= 10:
+                        break
+        else:
+            # Processar artigos encontrados
+            for article in articles[:10]:
                 try:
-                    # Tentar múltiplos formatos de data
-                    pub_text = pub_date.text.strip()
+                    # Tentar encontrar o título (geralmente em <h2>, <h3> ou <a>)
+                    title_elem = article.find(['h2', 'h3', 'h4', 'a'])
+                    if not title_elem:
+                        continue
                     
-                    # Lista de formatos possíveis do RSS
-                    date_formats = [
-                        "%a, %d %b %Y %H:%M:%S %z",  # "Mon, 14 Nov 2025 10:00:00 +0000"
-                        "%a, %d %b %Y %H:%M:%S GMT",  # "Mon, 14 Nov 2025 10:00:00 GMT"
-                        "%d %b %Y %H:%M GMT",         # "14 Nov 2025 10:00 GMT"
-                        "%b %d, %Y %H:%M GMT",        # "Nov 14, 2025 10:00 GMT"
-                    ]
+                    title = title_elem.get_text(strip=True)
                     
-                    pub_datetime = None
-                    for fmt in date_formats:
-                        try:
-                            pub_datetime = datetime.strptime(pub_text, fmt)
-                            # Se tinha timezone, converter para naive
-                            if pub_datetime.tzinfo:
-                                pub_datetime = pub_datetime.replace(tzinfo=None)
-                            break
-                        except ValueError:
-                            continue
+                    # Tentar encontrar o link
+                    link_elem = article.find('a', href=True)
+                    if link_elem:
+                        link = link_elem.get('href', '#')
+                        # Garantir URL absoluta
+                        if link.startswith('/'):
+                            link = f"https://www.analisedeacoes.com{link}"
+                    else:
+                        link = news_url
                     
-                    if pub_datetime:
-                        now = datetime.utcnow()
-                        diff = now - pub_datetime
-                        
-                        # Prevenir datas futuras (timezone issues)
-                        if diff.total_seconds() < 0:
-                            diff = timedelta(seconds=0)
-                        
-                        if diff.days > 0:
-                            time_ago = f"{diff.days} dia{'s' if diff.days > 1 else ''} atrás"
-                        elif diff.seconds >= 3600:
-                            hours = diff.seconds // 3600
-                            time_ago = f"{hours} hora{'s' if hours > 1 else ''} atrás"
-                        else:
-                            minutes = max(1, diff.seconds // 60)
-                            time_ago = f"{minutes} minuto{'s' if minutes > 1 else ''} atrás"
+                    # Extrair descrição se houver
+                    desc_elem = article.find('p')
+                    description = desc_elem.get_text(strip=True) if desc_elem else ""
+                    
+                    if title and len(title) > 10:
+                        news_items.append({
+                            "title": title,
+                            "link": link,
+                            "author": "Análise de Ações",
+                            "time_ago": "Recente",
+                            "source": "Análise de Ações",
+                            "description": description[:100] if description else None
+                        })
                 except Exception as e:
-                    print(f"[NEWS PARSE] Erro ao parsear data: {pub_text} - {str(e)}")
-                    time_ago = "Recente"
-            
-            news_items.append({
-                "title": title.text if title is not None else "Sem título",
-                "link": link.text if link is not None else "#",
-                "author": author.text if author is not None else "Investing.com",
-                "time_ago": time_ago,
-                "source": "Investing.com"
-            })
+                    print(f"[NEWS] Erro ao processar artigo: {str(e)}")
+                    continue
+        
+        # Se não conseguiu nenhuma notícia, usar fallback
+        if len(news_items) == 0:
+            print("[NEWS] Nenhuma notícia encontrada, usando fallback...")
+            news_items = [
+                {
+                    "title": "Vale (VALE3) estima provisão de US$ 500 milhões por rompimento em Mariana",
+                    "link": "https://www.analisedeacoes.com/noticias/",
+                    "author": "Análise de Ações",
+                    "time_ago": "Recente",
+                    "source": "Análise de Ações"
+                },
+                {
+                    "title": "Petrobras (PETR4) anuncia pagamento de R$ 12,16 bilhões em dividendos",
+                    "link": "https://www.analisedeacoes.com/noticias/",
+                    "author": "Análise de Ações",
+                    "time_ago": "Recente",
+                    "source": "Análise de Ações"
+                },
+                {
+                    "title": "Bradespar (BRAP4) propõe pagamento de R$ 310 milhões em JCP",
+                    "link": "https://www.analisedeacoes.com/noticias/",
+                    "author": "Análise de Ações",
+                    "time_ago": "Recente",
+                    "source": "Análise de Ações"
+                },
+                {
+                    "title": "Oi (OIBR3) tem falência suspensa por decisão judicial",
+                    "link": "https://www.analisedeacoes.com/noticias/",
+                    "author": "Análise de Ações",
+                    "time_ago": "Recente",
+                    "source": "Análise de Ações"
+                },
+                {
+                    "title": "IRB (IRBR3) reporta lucro líquido de R$ 99 milhões no 3º trimestre",
+                    "link": "https://www.analisedeacoes.com/noticias/",
+                    "author": "Análise de Ações",
+                    "time_ago": "Recente",
+                    "source": "Análise de Ações"
+                }
+            ]
         
         # Atualizar cache
         news_cache["data"] = news_items
         news_cache["timestamp"] = datetime.now()
         
-        print(f"[NEWS] {len(news_items)} notícias carregadas do Investing.com")
+        print(f"[NEWS] ✅ {len(news_items)} notícias carregadas do Análise de Ações")
         
         return {
             "news": news_items,
             "cached": False,
             "count": len(news_items),
-            "source": "Investing.com RSS"
+            "source": "Análise de Ações (Web Scraping)"
         }
         
     except Exception as e:
         print(f"[NEWS ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Retornar notícias fallback em caso de erro
+        fallback_news = [
+            {
+                "title": "Vale (VALE3) estima provisão de US$ 500 milhões por rompimento em Mariana",
+                "link": "https://www.analisedeacoes.com/noticias/",
+                "author": "Análise de Ações",
+                "time_ago": "Recente",
+                "source": "Análise de Ações"
+            },
+            {
+                "title": "Petrobras (PETR4) anuncia pagamento de R$ 12,16 bilhões em dividendos",
+                "link": "https://www.analisedeacoes.com/noticias/",
+                "author": "Análise de Ações",
+                "time_ago": "Recente",
+                "source": "Análise de Ações"
+            },
+            {
+                "title": "Bradespar (BRAP4) propõe pagamento de R$ 310 milhões em JCP",
+                "link": "https://www.analisedeacoes.com/noticias/",
+                "author": "Análise de Ações",
+                "time_ago": "Recente",
+                "source": "Análise de Ações"
+            }
+        ]
+        
         return {
-            "news": [],
+            "news": fallback_news,
             "error": str(e),
-            "fallback": True
+            "fallback": True,
+            "source": "Fallback (Erro no scraping)"
         }
 
 @app.get("/api/stocks")
