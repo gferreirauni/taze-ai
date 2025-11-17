@@ -130,16 +130,9 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             # Intraday (primeiro item é o mais recente)
             intraday_latest = intraday_data["data"][0] if intraday_data and "data" in intraday_data and len(intraday_data["data"]) > 0 else {}
             
-            # Debug: Verificar intraday
-            print(f"\n[TRADEBOX] === INTRADAY DATA para {symbol} ===")
-            if intraday_data:
-                print(f"[TRADEBOX] Response intraday: {intraday_data}")
-            print(f"[TRADEBOX] Campos do intraday: {list(intraday_latest.keys()) if intraday_latest else 'VAZIO!'}")
-            if intraday_latest:
-                import json
-                print(f"[TRADEBOX] Valores: {json.dumps(intraday_latest, indent=2, ensure_ascii=False)[:500]}")
-            else:
-                print(f"[TRADEBOX] ⚠️ INTRADAY VAZIO! Usando dados do histórico...")
+            # Verificar se intraday está vazio (API retorna erro)
+            if not intraday_latest:
+                print(f"[TRADEBOX] ⚠️ Intraday vazio para {symbol}, usando fallback")
             
             # Histórico (mapear para formato esperado)
             history = []
@@ -160,15 +153,11 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             # Fundamentais (objeto inteiro)
             fundamentals = fundamentals_data["data"][0] if fundamentals_data and "data" in fundamentals_data else {}
             
-            # Debug: Verificar fundamentals
+            # Verificar fundamentals
             if fundamentals:
-                print(f"\n[TRADEBOX] ✅ Fundamentals recebidos para {symbol}: {len(fundamentals)} indicadores")
-                print(f"[TRADEBOX] TODOS os campos: {list(fundamentals.keys())}")
-                print(f"\n[TRADEBOX] VALORES dos fundamentals:")
-                import json
-                print(json.dumps(fundamentals, indent=2, ensure_ascii=False)[:1000])  # Primeiros 1000 chars
+                print(f"[TRADEBOX] ✅ Fundamentals: {len(fundamentals)} indicadores (P/L: {fundamentals.get('indicators_pl')}, DY: {fundamentals.get('indicators_div_yield')}%)")
             else:
-                print(f"[TRADEBOX] ⚠️ FUNDAMENTALS VAZIOS para {symbol}!")
+                print(f"[TRADEBOX] ⚠️ Fundamentals vazios para {symbol}")
             
             # Calcular variação de 30 dias
             month_variation = 0
@@ -1185,20 +1174,9 @@ async def analyze_stock(request: AIAnalysisRequest):
     - Analista Fundamentalista (Buy & Hold)
     - Analista Técnico (Swing Trade)
     """
-    # Debug: Verificar dados recebidos
-    print(f"\n[AI DEBUG] === Recebido request para {request.symbol} ===")
-    print(f"[AI DEBUG] Fundamentals recebido? {request.fundamentals is not None}")
-    print(f"[AI DEBUG] Fundamentals vazio? {request.fundamentals == {} if request.fundamentals else 'None'}")
-    if request.fundamentals:
-        print(f"[AI DEBUG] Total de indicadores: {len(request.fundamentals)}")
-        # Mostrar indicadores importantes
-        important = {
-            'indicators_pl': request.fundamentals.get('indicators_pl'),
-            'indicators_div_yield': request.fundamentals.get('indicators_div_yield'),
-            'indicators_roe': request.fundamentals.get('indicators_roe'),
-            'indicators_pvp': request.fundamentals.get('indicators_pvp')
-        }
-        print(f"[AI DEBUG] Indicadores chave: {important}")
+    # Log simplificado
+    fund_count = len(request.fundamentals) if request.fundamentals else 0
+    print(f"\n[AI] Gerando análise para {request.symbol} (Fundamentals: {fund_count} indicadores)")
     
     # Gerar análise REAL (não mock!)
     analysis = await generate_real_ai_analysis(
