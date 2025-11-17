@@ -130,6 +130,12 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             # Intraday (primeiro item é o mais recente)
             intraday_latest = intraday_data["data"][0] if intraday_data and "data" in intraday_data else {}
             
+            # Debug: Verificar intraday
+            print(f"\n[TRADEBOX] === INTRADAY DATA para {symbol} ===")
+            print(f"[TRADEBOX] Campos do intraday: {list(intraday_latest.keys())}")
+            import json
+            print(f"[TRADEBOX] Valores: {json.dumps(intraday_latest, indent=2, ensure_ascii=False)[:500]}")
+            
             # Histórico (mapear para formato esperado)
             history = []
             if histories_data and "data" in histories_data:
@@ -151,8 +157,11 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             
             # Debug: Verificar fundamentals
             if fundamentals:
-                print(f"[TRADEBOX] ✅ Fundamentals recebidos para {symbol}: {len(fundamentals)} indicadores")
-                print(f"[TRADEBOX] Primeiros indicadores: {list(fundamentals.keys())[:5]}")
+                print(f"\n[TRADEBOX] ✅ Fundamentals recebidos para {symbol}: {len(fundamentals)} indicadores")
+                print(f"[TRADEBOX] TODOS os campos: {list(fundamentals.keys())}")
+                print(f"\n[TRADEBOX] VALORES dos fundamentals:")
+                import json
+                print(json.dumps(fundamentals, indent=2, ensure_ascii=False)[:1000])  # Primeiros 1000 chars
             else:
                 print(f"[TRADEBOX] ⚠️ FUNDAMENTALS VAZIOS para {symbol}!")
             
