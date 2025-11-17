@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Search, TrendingUp, Newspaper, BarChart3 } from 'lucide-react'
 import Sidebar from '@/components/dashboard/Sidebar'
 import StockChart from '@/components/dashboard/StockChart'
@@ -14,10 +15,13 @@ interface Stock {
   dailyVariation: number
   monthVariation: number
   history: { date: string; value: number }[]
-  fundamentals?: any  // Dados fundamentalistas da API Tradebox
+  fundamentals?: any
 }
 
 export default function AnalisesPage() {
+  const searchParams = useSearchParams()
+  const tickerFromUrl = searchParams.get('ticker')
+  
   const [stocks, setStocks] = useState<Stock[]>([])
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [loading, setLoading] = useState(true)
@@ -35,6 +39,15 @@ export default function AnalisesPage() {
         
         const data = await response.json()
         setStocks(data.stocks)
+        
+        // Se há ticker na URL, selecionar automaticamente
+        if (tickerFromUrl && data.stocks) {
+          const stock = data.stocks.find((s: Stock) => s.symbol === tickerFromUrl.toUpperCase())
+          if (stock) {
+            setSelectedStock(stock)
+            console.log(`[ANÁLISES] Ticker da URL: ${tickerFromUrl} - Ação selecionada automaticamente`)
+          }
+        }
       } catch (error) {
         console.error('Erro ao buscar ações:', error)
       } finally {
@@ -43,7 +56,7 @@ export default function AnalisesPage() {
     }
 
     fetchStocks()
-  }, [])
+  }, [tickerFromUrl])
 
   const filteredStocks = stocks.filter(stock =>
     stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||

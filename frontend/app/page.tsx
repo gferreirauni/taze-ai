@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Activity, Newspaper, TrendingUp, Wallet } from 'lucide-react'
+import { Newspaper, Sparkles, TrendingUp } from 'lucide-react'
 import Sidebar from '@/components/dashboard/Sidebar'
-import SummaryCard from '@/components/dashboard/SummaryCard'
-import StockList from '@/components/dashboard/StockList'
 import ChatWidget from '@/components/dashboard/ChatWidget'
+import AIScoreCard from '@/components/dashboard/AIScoreCard'
 
 interface Stock {
   symbol: string
@@ -15,14 +14,15 @@ interface Stock {
   dailyVariation: number
   monthVariation?: number
   history: { date: string; value: number }[]
-  fundamentals?: any  // Dados fundamentalistas da API Tradebox
-}
-
-interface PortfolioSummary {
-  totalValue: number
-  dailyChange: number
-  dailyChangeValue: number
-  stocksCount: number
+  fundamentals?: any
+  ai_analysis?: {
+    buyAndHoldScore: number
+    buyAndHoldSummary: string
+    swingTradeScore: number
+    swingTradeSummary: string
+    recommendation: string
+    generatedAt: string
+  }
 }
 
 interface NewsItem {
@@ -35,8 +35,6 @@ interface NewsItem {
 
 export default function Dashboard() {
   const [stocks, setStocks] = useState<Stock[]>([])
-  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null)
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [newsLoading, setNewsLoading] = useState(true)
@@ -53,11 +51,26 @@ export default function Dashboard() {
         }
         
         const stocksData = await stocksResponse.json()
-        setStocks(stocksData.stocks)
-
-        const portfolioResponse = await fetch('http://localhost:8000/api/portfolio/summary')
-        const portfolioData = await portfolioResponse.json()
-        setPortfolio(portfolioData)
+        
+        // Buscar análises em cache para cada ação
+        const stocksWithAnalysis = await Promise.all(
+          stocksData.stocks.map(async (stock: Stock) => {
+            try {
+              const analysisResponse = await fetch(`http://localhost:8000/api/ai/analysis/${stock.symbol}`)
+              const analysisData = await analysisResponse.json()
+              
+              if (analysisData.cached && analysisData.analysis) {
+                return { ...stock, ai_analysis: analysisData.analysis }
+              }
+              return stock
+            } catch (error) {
+              console.error(`Erro ao buscar análise de ${stock.symbol}:`, error)
+              return stock
+            }
+          })
+        )
+        
+        setStocks(stocksWithAnalysis)
       } catch (error) {
         console.error('Erro ao buscar dados:', error)
       } finally {
@@ -71,7 +84,7 @@ export default function Dashboard() {
         const newsData = await newsResponse.json()
         
         if (newsData.news && newsData.news.length > 0) {
-          setNews(newsData.news.slice(0, 5))  // Mostrar apenas 5 notícias
+          setNews(newsData.news.slice(0, 5))
         }
       } catch (error) {
         console.error('Erro ao buscar notícias:', error)
@@ -83,7 +96,7 @@ export default function Dashboard() {
     fetchData()
     fetchNews()
     
-    const stocksInterval = setInterval(fetchData, 30000)
+    const stocksInterval = setInterval(fetchData, 300000)  // 5 minutos
     const newsInterval = setInterval(fetchNews, 900000)  // 15 minutos
     
     return () => {
@@ -110,58 +123,43 @@ export default function Dashboard() {
       <div className="ml-64 flex-1 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-zinc-500">Bem-vindo ao seu painel de investimentos</p>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <SummaryCard
-            title="Patrimônio Total"
-            value={portfolio ? `R$ ${portfolio.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-            change={portfolio ? `${portfolio.dailyChange >= 0 ? '+' : ''}${portfolio.dailyChange.toFixed(2)}%` : undefined}
-            changeType={portfolio && portfolio.dailyChange >= 0 ? 'positive' : 'negative'}
-            icon={Wallet}
-          />
-          <SummaryCard
-            title="Rentabilidade Hoje"
-            value={portfolio ? `R$ ${portfolio.dailyChangeValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-            change={portfolio ? `${portfolio.dailyChange >= 0 ? '+' : ''}${portfolio.dailyChange.toFixed(2)}%` : undefined}
-            changeType={portfolio && portfolio.dailyChange >= 0 ? 'positive' : 'negative'}
-            icon={TrendingUp}
-          />
-          <SummaryCard
-            title="Ações Monitoradas"
-            value={stocks.length.toString()}
-            change="5 empresas da B3"
-            changeType="neutral"
-            icon={Activity}
-          />
-        </div>
-
-        {/* Portfolio Chart */}
-        {portfolio && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-              Evolução do Patrimônio (30 dias)
-            </h2>
-            <div className="h-64 flex items-center justify-center text-zinc-500">
-              <div className="text-center">
-                <TrendingUp size={48} className="mx-auto mb-4 opacity-50" />
-                <p>Gráfico de evolução será implementado em breve</p>
-                <p className="text-sm mt-2">Conecte sua corretora para visualizar histórico</p>
-              </div>
-            </div>
+          <div className="flex items-center gap-3 mb-2">
+            <Sparkles className="w-8 h-8 text-purple-500" />
+            <h1 className="text-4xl font-bold text-white">Painel de Decisão Taze AI</h1>
           </div>
-        )}
+          <p className="text-zinc-400 text-lg">
+            Análises de IA para os principais ativos da B3, atualizadas diariamente
+          </p>
+          <p className="text-zinc-600 text-sm mt-1">
+            Scores inteligentes para Buy & Hold e Swing Trade
+          </p>
+        </div>
+
+        {/* AI Score Cards Grid */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              Análises Inteligentes
+            </h2>
+            <span className="text-xs text-zinc-500">
+              {stocks.filter(s => s.ai_analysis).length} de {stocks.length} com análise de IA
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {stocks.map((stock) => (
+              <AIScoreCard key={stock.symbol} stock={stock} />
+            ))}
+          </div>
+        </div>
 
         {/* News Section */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <Newspaper className="w-5 h-5 text-blue-500" />
             Últimas Notícias Relevantes
-            <span className="text-xs text-zinc-500 font-normal ml-auto">via Investing.com</span>
+            <span className="text-xs text-zinc-500 font-normal ml-auto">via Análise de Ações</span>
           </h2>
           
           {newsLoading ? (
@@ -202,18 +200,6 @@ export default function Dashboard() {
                   </div>
                 </a>
               ))}
-
-              <div className="text-center mt-4">
-                <a
-                  href="https://br.investing.com/analysis/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm font-medium"
-                >
-                  <Newspaper size={16} />
-                  Ver todas as notícias no Investing.com
-                </a>
-              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-zinc-500">
@@ -223,21 +209,15 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Stock List */}
-        <StockList
-          stocks={stocks}
-          onSelectStock={setSelectedStock}
-          selectedStock={selectedStock || undefined}
-        />
-
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-zinc-600">
-          <p>Dados atualizados automaticamente • Última atualização: {new Date().toLocaleTimeString('pt-BR')}</p>
+          <p>Análises atualizadas diariamente • Dados em tempo real via Tradebox API</p>
         </div>
       </div>
 
       {/* Chat Assistant */}
-      <ChatWidget selectedStock={selectedStock || undefined} />
+      <ChatWidget />
     </div>
   )
 }
+
