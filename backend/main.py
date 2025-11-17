@@ -977,6 +977,142 @@ R$ {min_price:.2f} (crítico) | R$ {min_price * 0.95:.2f} (extensão)
         "disclaimer": "Análise automatizada para fins educacionais. Não é recomendação de investimento."
     }
 
+async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: str, fundamentals: dict, history: list) -> dict:
+    """
+    Gera análise de IA REAL usando OpenAI GPT-4o
+    
+    Utiliza dois perfis de analistas:
+    1. Fundamentalista (Warren) - Buy & Hold
+    2. Técnico (Trader) - Swing Trade
+    
+    Retorna JSON estruturado com scores e recomendações
+    """
+    import json
+    
+    # System Prompt Mestre (dois analistas)
+    system_prompt = """Você é um comitê de dois analistas financeiros de elite da B3:
+
+1. **Analista Fundamentalista (Warren):** Especialista em 'Buy & Hold'. Você analisa:
+   - P/L (Preço/Lucro)
+   - P/VP (Preço/Valor Patrimonial)
+   - ROE (Retorno sobre Patrimônio)
+   - Dividend Yield (rendimento de dividendos)
+   - Dívida/Patrimônio
+   - Margem Líquida
+   - Crescimento de receita
+
+2. **Analista Técnico (Trader):** Especialista em 'Swing Trade'. Você analisa:
+   - Histórico de preços (90 dias)
+   - Tendências (alta, baixa, lateral)
+   - Médias móveis (7d, 21d, 50d)
+   - RSI (Relative Strength Index)
+   - Volatilidade
+   - Suporte e resistência
+
+Sua tarefa é analisar os dados fornecidos e retornar um JSON ESTRITO com esta estrutura:
+
+{
+  "buy_and_hold_score": 7.5,
+  "buy_and_hold_summary": "Análise fundamentalista em português (máximo 150 palavras)",
+  "swing_trade_score": 8.0,
+  "swing_trade_summary": "Análise técnica em português (máximo 150 palavras)",
+  "recommendation": "COMPRA FORTE"
+}
+
+Critérios de Score:
+- 0-3: Ruim (evitar)
+- 4-5: Fraco (cautela)
+- 6-7: Razoável (considerar)
+- 8-9: Bom (recomendado)
+- 10: Excelente (altamente recomendado)
+
+Opções de Recommendation:
+- COMPRA FORTE
+- COMPRA
+- MANTER
+- VENDA
+- VENDA FORTE
+
+Seja objetivo, técnico e baseie-se APENAS nos dados fornecidos.
+RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
+
+    # User Prompt (dados da ação)
+    user_prompt = f"""Analise esta ação da B3:
+
+**AÇÃO:** {symbol}
+**SETOR:** {sector}
+**PREÇO ATUAL:** R$ {currentPrice:.2f}
+
+**DADOS FUNDAMENTALISTAS:**
+```json
+{json.dumps(fundamentals, indent=2, ensure_ascii=False)}
+```
+
+**HISTÓRICO DE PREÇOS (últimos 90 dias):**
+```json
+{json.dumps(history[-90:], indent=2, ensure_ascii=False)}
+```
+
+Analise estes dados e retorne o JSON conforme especificado."""
+
+    try:
+        print(f"[AI] Gerando análise REAL para {symbol} usando GPT-4o...")
+        
+        # Chamar OpenAI GPT-4o
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},  # Força resposta JSON
+            temperature=0.7,  # Criatividade moderada
+            max_tokens=1200   # Limite de tokens
+        )
+        
+        # Extrair JSON da resposta
+        ai_response = json.loads(response.choices[0].message.content)
+        
+        print(f"[AI] Análise gerada com sucesso para {symbol}")
+        print(f"[AI] Scores: Buy&Hold={ai_response.get('buy_and_hold_score')}, SwingTrade={ai_response.get('swing_trade_score')}")
+        
+        # Validar campos obrigatórios
+        required_fields = [
+            "buy_and_hold_score", 
+            "buy_and_hold_summary",
+            "swing_trade_score",
+            "swing_trade_summary",
+            "recommendation"
+        ]
+        
+        for field in required_fields:
+            if field not in ai_response:
+                raise ValueError(f"Campo obrigatório ausente: {field}")
+        
+        # Retornar resposta estruturada
+        return {
+            "symbol": symbol,
+            "buyAndHoldScore": float(ai_response["buy_and_hold_score"]),
+            "buyAndHoldSummary": ai_response["buy_and_hold_summary"],
+            "swingTradeScore": float(ai_response["swing_trade_score"]),
+            "swingTradeSummary": ai_response["swing_trade_summary"],
+            "recommendation": ai_response["recommendation"],
+            "generatedAt": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"[AI ERROR] Erro ao gerar análise: {e}")
+        # Fallback: retornar análise básica
+        return {
+            "symbol": symbol,
+            "buyAndHoldScore": 5.0,
+            "buyAndHoldSummary": f"Erro ao gerar análise fundamentalista. Tente novamente. Erro: {str(e)[:100]}",
+            "swingTradeScore": 5.0,
+            "swingTradeSummary": f"Erro ao gerar análise técnica. Tente novamente. Erro: {str(e)[:100]}",
+            "recommendation": "MANTER",
+            "generatedAt": datetime.now().isoformat()
+        }
+
 @app.get("/api/ai/analysis/{symbol}")
 async def get_cached_analysis(symbol: str):
     """
@@ -1002,20 +1138,21 @@ async def get_cached_analysis(symbol: str):
 @app.post("/api/ai/analyze")
 async def analyze_stock(request: AIAnalysisRequest):
     """
-    Gera nova análise de IA e salva em cache por dia
-    Só deve ser chamado quando usuário clica em "Gerar/Atualizar Análise"
-    Agora usa dados fundamentalistas reais da API Tradebox!
+    Gera nova análise de IA REAL usando OpenAI GPT-4o
+    Substitui o mock por análise profissional com dois perfis:
+    - Analista Fundamentalista (Buy & Hold)
+    - Analista Técnico (Swing Trade)
     """
-    # Gerar análise (com fundamentals)
-    analysis = mock_ai_analysis(
-        request.symbol,
-        request.currentPrice,
-        request.dailyVariation,
-        request.history,
-        request.fundamentals  # Passar fundamentals da API
+    # Gerar análise REAL (não mock!)
+    analysis = await generate_real_ai_analysis(
+        symbol=request.symbol,
+        currentPrice=request.currentPrice,
+        sector=request.fundamentals.get("sector", "N/A") if request.fundamentals else "N/A",
+        fundamentals=request.fundamentals or {},
+        history=request.history
     )
     
-    # Salvar em cache (por dia)
+    # Salvar em cache (por dia) - ESSENCIAL para economizar tokens!
     today = datetime.now().strftime("%Y-%m-%d")
     cache_key = f"{request.symbol}_{today}"
     ai_analysis_cache[cache_key] = {
@@ -1023,7 +1160,7 @@ async def analyze_stock(request: AIAnalysisRequest):
         "timestamp": datetime.now()
     }
     
-    print(f"[AI CACHE] Análise gerada e armazenada: {cache_key} (com fundamentals: {request.fundamentals is not None})")
+    print(f"[AI CACHE] Análise REAL gerada e armazenada: {cache_key}")
     
     return analysis
 

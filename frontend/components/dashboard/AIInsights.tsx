@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bot, TrendingUp, TrendingDown, Minus, FileText, Sparkles, RefreshCw } from 'lucide-react'
+import { Bot, TrendingUp, TrendingDown, Sparkles, RefreshCw, Target, Activity } from 'lucide-react'
 
 interface Stock {
   symbol: string
@@ -9,18 +9,17 @@ interface Stock {
   currentPrice: number
   dailyVariation: number
   history: { date: string; value: number }[]
-  fundamentals?: any  // Dados fundamentalistas da API Tradebox
+  fundamentals?: any
 }
 
-interface AIAnalysis {
+interface AIAnalysisResponse {
   symbol: string
+  buyAndHoldScore: number
+  buyAndHoldSummary: string
+  swingTradeScore: number
+  swingTradeSummary: string
   recommendation: string
-  sentiment: 'bullish' | 'bearish' | 'neutral'
-  confidence: number
-  analysis: string
-  sectorInsight: string
   generatedAt: string
-  disclaimer: string
 }
 
 interface AIInsightsProps {
@@ -28,7 +27,7 @@ interface AIInsightsProps {
 }
 
 export default function AIInsights({ stock }: AIInsightsProps) {
-  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null)
+  const [analysis, setAnalysis] = useState<AIAnalysisResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [cached, setCached] = useState(false)
 
@@ -62,9 +61,6 @@ export default function AIInsights({ stock }: AIInsightsProps) {
     setLoading(true)
     setCached(false)
     
-    // Simular delay para UX
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
     try {
       const response = await fetch('http://localhost:8000/api/ai/analyze', {
         method: 'POST',
@@ -76,7 +72,7 @@ export default function AIInsights({ stock }: AIInsightsProps) {
           currentPrice: stock.currentPrice,
           dailyVariation: stock.dailyVariation,
           history: stock.history,
-          fundamentals: stock.fundamentals  // Incluir dados fundamentalistas
+          fundamentals: stock.fundamentals
         }),
       })
 
@@ -91,10 +87,26 @@ export default function AIInsights({ stock }: AIInsightsProps) {
   }
 
   const getRecommendationColor = (rec: string) => {
-    if (rec.includes('COMPRA')) return 'text-emerald-500 bg-emerald-500/10'
-    if (rec.includes('VENDA')) return 'text-red-500 bg-red-500/10'
-    if (rec.includes('ATENÇÃO')) return 'text-orange-500 bg-orange-500/10'
-    return 'text-blue-500 bg-blue-500/10'
+    if (rec === 'COMPRA FORTE') return 'bg-emerald-500 text-white'
+    if (rec === 'COMPRA') return 'bg-emerald-600 text-white'
+    if (rec === 'MANTER') return 'bg-blue-500 text-white'
+    if (rec === 'VENDA') return 'bg-orange-600 text-white'
+    if (rec === 'VENDA FORTE') return 'bg-red-500 text-white'
+    return 'bg-zinc-700 text-white'
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return 'text-emerald-400 border-emerald-500'
+    if (score >= 6) return 'text-blue-400 border-blue-500'
+    if (score >= 4) return 'text-orange-400 border-orange-500'
+    return 'text-red-400 border-red-500'
+  }
+
+  const getScoreLabel = (score: number) => {
+    if (score >= 8) return 'Excelente'
+    if (score >= 6) return 'Bom'
+    if (score >= 4) return 'Razoável'
+    return 'Fraco'
   }
 
   return (
@@ -105,43 +117,45 @@ export default function AIInsights({ stock }: AIInsightsProps) {
           <Bot className="w-5 h-5 text-purple-500" />
           <h2 className="text-xl font-bold text-white">Análise de IA</h2>
         </div>
-        <span className="text-xs text-zinc-500">Powered by Taze AI Engine</span>
+        <span className="text-xs text-zinc-500">Powered by GPT-4o</span>
       </div>
 
       {/* Loading State */}
       {loading && (
-        <div className="flex flex-col items-center justify-center h-full p-6">
-          <Bot size={48} className="text-purple-400 animate-pulse" />
-          <p className="mt-4 text-lg font-semibold text-zinc-300">
+        <div className="flex flex-col items-center justify-center p-8">
+          <Bot size={48} className="text-purple-400 animate-pulse mb-4" />
+          <p className="text-lg font-semibold text-zinc-300 mb-2">
             Analisando {stock.symbol} com IA...
           </p>
-          <div className="mt-4 w-full space-y-2">
-            <div className="h-4 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-4 bg-zinc-800 rounded animate-pulse w-5/6" />
-            <div className="h-4 bg-zinc-800 rounded animate-pulse w-4/5" />
-            <div className="h-4 bg-zinc-800 rounded animate-pulse w-11/12" />
-            <div className="h-4 bg-zinc-800 rounded animate-pulse w-3/4" />
+          <p className="text-sm text-zinc-500 mb-4">
+            Processando dados técnicos e fundamentalistas...
+          </p>
+          <div className="w-full max-w-md space-y-2">
+            <div className="h-3 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-3 bg-zinc-800 rounded animate-pulse w-5/6" />
+            <div className="h-3 bg-zinc-800 rounded animate-pulse w-4/5" />
           </div>
         </div>
       )}
 
       {/* No Analysis State */}
       {!loading && !analysis && (
-        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <div className="flex flex-col items-center justify-center p-8 text-center">
           <Sparkles size={48} className="text-zinc-700 mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">Gerar Análise de IA</h3>
-          <p className="text-zinc-500 mb-6 text-sm">
-            Clique no botão abaixo para gerar uma análise detalhada de {stock.symbol} com IA.
+          <h3 className="text-lg font-semibold text-white mb-2">Gerar Análise Profissional</h3>
+          <p className="text-zinc-500 mb-6 text-sm max-w-md">
+            Análise com IA utilizando dados técnicos e fundamentalistas.
+            Receba scores para Buy & Hold e Swing Trade.
           </p>
           <button
             onClick={generateAnalysis}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:scale-105 transition-transform duration-200 flex items-center gap-2"
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:scale-105 transition-transform duration-200 flex items-center gap-2 shadow-lg shadow-purple-500/20"
           >
             <Sparkles size={18} />
             Gerar Análise
           </button>
           <p className="text-xs text-zinc-600 mt-4">
-            💡 A análise é salva por 24h para economizar tokens
+            💡 Cache de 24h para economizar tokens
           </p>
         </div>
       )}
@@ -149,15 +163,7 @@ export default function AIInsights({ stock }: AIInsightsProps) {
       {/* Analysis Display */}
       {!loading && analysis && (
         <>
-          {/* Recommendation Badge */}
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-4 ${getRecommendationColor(analysis.recommendation)}`}>
-            {analysis.recommendation.includes('COMPRA') && <TrendingUp size={18} />}
-            {analysis.recommendation.includes('VENDA') && <TrendingDown size={18} />}
-            {analysis.recommendation.includes('MANTER') && <Minus size={18} />}
-            <span className="font-bold text-sm">{analysis.recommendation}</span>
-            <span className="text-xs opacity-70">• {analysis.confidence}% confiança</span>
-          </div>
-
+          {/* Cache Indicator */}
           {cached && (
             <div className="flex items-center gap-2 mb-4 text-xs text-emerald-500">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -165,17 +171,83 @@ export default function AIInsights({ stock }: AIInsightsProps) {
             </div>
           )}
 
-          {/* Analysis Text */}
-          <div className="prose prose-invert max-w-none mb-4">
-            <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-              {analysis.analysis}
+          {/* Recommendation Badge */}
+          <div className="flex justify-center mb-6">
+            <div className={`px-6 py-3 rounded-xl font-bold text-lg shadow-lg ${getRecommendationColor(analysis.recommendation)}`}>
+              {analysis.recommendation}
             </div>
           </div>
 
-          {/* Sector Context */}
-          <div className="bg-zinc-800/50 rounded-lg p-4 mb-4 border border-zinc-700">
-            <p className="text-xs font-semibold text-emerald-500 mb-1">Contexto do Setor:</p>
-            <p className="text-sm text-zinc-400">{analysis.sectorInsight}</p>
+          {/* Score Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Buy & Hold Score */}
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-bold text-white">Buy & Hold</h3>
+              </div>
+              
+              <div className="flex items-end gap-3 mb-4">
+                <div className={`text-5xl font-bold ${getScoreColor(analysis.buyAndHoldScore)}`}>
+                  {analysis.buyAndHoldScore.toFixed(1)}
+                </div>
+                <div className="text-sm text-zinc-500 mb-2">/ 10</div>
+              </div>
+
+              <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${getScoreColor(analysis.buyAndHoldScore)} bg-opacity-10`}>
+                {getScoreLabel(analysis.buyAndHoldScore)}
+              </div>
+
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                {analysis.buyAndHoldSummary}
+              </p>
+            </div>
+
+            {/* Swing Trade Score */}
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-bold text-white">Swing Trade</h3>
+              </div>
+              
+              <div className="flex items-end gap-3 mb-4">
+                <div className={`text-5xl font-bold ${getScoreColor(analysis.swingTradeScore)}`}>
+                  {analysis.swingTradeScore.toFixed(1)}
+                </div>
+                <div className="text-sm text-zinc-500 mb-2">/ 10</div>
+              </div>
+
+              <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${getScoreColor(analysis.swingTradeScore)} bg-opacity-10`}>
+                {getScoreLabel(analysis.swingTradeScore)}
+              </div>
+
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                {analysis.swingTradeSummary}
+              </p>
+            </div>
+          </div>
+
+          {/* Score Legend */}
+          <div className="bg-zinc-800/30 border border-zinc-700 rounded-lg p-4 mb-4">
+            <p className="text-xs font-semibold text-zinc-400 mb-2">Legenda de Scores:</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
+                <span className="text-zinc-500">8-10: Excelente</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-400"></div>
+                <span className="text-zinc-500">6-7: Bom</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-orange-400"></div>
+                <span className="text-zinc-500">4-5: Razoável</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                <span className="text-zinc-500">0-3: Fraco</span>
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -183,23 +255,17 @@ export default function AIInsights({ stock }: AIInsightsProps) {
             <button
               onClick={generateAnalysis}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2.5 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-700"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               Atualizar Análise
-            </button>
-            <button
-              className="flex-1 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <FileText size={16} />
-              Relatório Completo
             </button>
           </div>
 
           {/* Disclaimer */}
           <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
             <p className="text-xs text-orange-400">
-              ⚠️ {analysis.disclaimer}
+              ⚠️ Análise automatizada para fins educacionais. Não é recomendação de investimento.
             </p>
           </div>
 
