@@ -6,6 +6,7 @@ import { Search, TrendingUp, Newspaper, BarChart3 } from 'lucide-react'
 import Sidebar from '@/components/dashboard/Sidebar'
 import StockChart from '@/components/dashboard/StockChart'
 import AIInsights from '@/components/dashboard/AIInsights'
+import ChatWidget from '@/components/dashboard/ChatWidget'
 
 interface Stock {
   symbol: string
@@ -26,6 +27,7 @@ export default function AnalisesPage() {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     async function fetchStocks() {
@@ -76,9 +78,11 @@ export default function AnalisesPage() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
 
-      <div className="ml-64 flex-1 p-8">
+      <div className={`flex-1 p-4 md:p-8 transition-all duration-300 ${
+        sidebarCollapsed ? 'ml-20' : 'ml-64'
+      }`}>
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Análises</h1>
@@ -186,6 +190,9 @@ export default function AnalisesPage() {
           </div>
         </div>
       </div>
+
+      {/* Chat Assistant */}
+      <ChatWidget />
     </div>
   )
 }

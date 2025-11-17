@@ -78,7 +78,7 @@ def update_cache(data):
 # ==================== DADOS REAIS COM TRADEBOX API ====================
 
 # Lista de ações da B3 que vamos monitorar
-B3_STOCKS = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3"]
+B3_STOCKS = ["PETR4", "BBAS3", "VALE3", "MGLU3", "WEGE3"]
 
 # Função para buscar dados agregados da API Tradebox
 async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
@@ -197,60 +197,6 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
         except Exception as e:
             print(f"[TRADEBOX ERROR] Erro ao processar {symbol}: {str(e)}")
             return None
-
-def generate_mock_stock_data():
-    """
-    Gera dados mockados realistas para fallback
-    Usado quando yfinance falha ou está muito lento
-    """
-    print("[FALLBACK] Usando dados mockados realistas")
-    
-    mock_stocks = [
-        {"symbol": "PETR4", "name": "Petrobras PN", "base_price": 38.50, "sector": "Energia"},
-        {"symbol": "VALE3", "name": "Vale ON", "base_price": 61.20, "sector": "Mineracao"},
-        {"symbol": "ITUB4", "name": "Itau Unibanco PN", "base_price": 26.80, "sector": "Financeiro"},
-        {"symbol": "WEGE3", "name": "WEG ON", "base_price": 42.15, "sector": "Industria"},
-        {"symbol": "BBAS3", "name": "Banco do Brasil ON", "base_price": 28.90, "sector": "Financeiro"}
-    ]
-    
-    stocks_data = []
-    
-    for stock in mock_stocks:
-        # Gerar histórico de 30 dias
-        history = []
-        current_date = datetime.now() - timedelta(days=30)
-        current_price = stock["base_price"] * random.uniform(0.9, 0.95)
-        
-        for day in range(30):
-            daily_change = random.uniform(-0.02, 0.02)
-            current_price = current_price * (1 + daily_change)
-            history.append({
-                "date": (current_date + timedelta(days=day)).strftime("%Y-%m-%d"),
-                "value": round(current_price, 2)
-            })
-        
-        # Variação diária
-        last_price = history[-1]["value"]
-        prev_price = history[-2]["value"]
-        daily_variation = ((last_price - prev_price) / prev_price) * 100
-        
-        # Variação de 30 dias (mock)
-        first_price = history[0]["value"]
-        month_variation = ((last_price - first_price) / first_price) * 100
-        
-        stocks_data.append({
-            "symbol": stock["symbol"],
-            "name": stock["name"],
-            "sector": stock["sector"],
-            "currentPrice": round(last_price, 2),
-            "dailyVariation": round(daily_variation, 2),
-            "monthVariation": round(month_variation, 2),
-            "history": history
-        })
-        
-        print(f"[MOCK] Dados gerados: {stock['symbol']} - R$ {last_price:.2f}")
-    
-    return stocks_data
 
 def fetch_real_stock_data():
     """
@@ -827,196 +773,26 @@ class AIAnalysisRequest(BaseModel):
     history: list
     fundamentals: dict = None
 
-def mock_ai_analysis(symbol: str, current_price: float, daily_variation: float, history: list, fundamentals: dict = None):
-    """
-    Simula uma análise de IA realista baseada nos dados da ação
-    Em produção, isso seria substituído por uma chamada real à OpenAI GPT-4
-    Agora usa dados fundamentalistas reais da API Tradebox!
-    """
-    
-    # Calcular métricas adicionais
-    prices = [h["value"] for h in history]
-    avg_price = sum(prices) / len(prices)
-    max_price = max(prices)
-    min_price = min(prices)
-    volatility = ((max_price - min_price) / avg_price) * 100
-    
-    # Calcular tendência (últimos 7 dias)
-    recent_prices = prices[-7:] if len(prices) >= 7 else prices
-    trend_up = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] > recent_prices[i-1])
-    trend_down = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] < recent_prices[i-1])
-    
-    # Extrair dados fundamentalistas (se disponíveis)
-    pl_ratio = None
-    div_yield = None
-    fundamental_text = ""
-    
-    if fundamentals:
-        pl_ratio = fundamentals.get("indicators_pl")
-        div_yield = fundamentals.get("indicators_div_yield")
-        
-        # Gerar texto fundamentalista
-        if pl_ratio is not None:
-            if pl_ratio < 10:
-                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Ação barata, potencial de valorização) "
-            elif pl_ratio < 20:
-                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Valuation razoável) "
-            else:
-                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Ação cara, avaliar com cautela) "
-        
-        if div_yield is not None and div_yield > 0:
-            if div_yield > 6:
-                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Excelente rendimento!) "
-            elif div_yield > 3:
-                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Bom pagador de dividendos) "
-            else:
-                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Foco em crescimento) "
-    
-    # Determinar recomendação e análise
-    if daily_variation > 2:
-        recommendation = "COMPRA FORTE"
-        sentiment = "bullish"
-        analysis = f"""📈 **Análise Técnica Positiva**
-
-A ação {symbol} apresenta forte momentum de alta com variação de {daily_variation:+.2f}% no dia. 
-
-**Indicadores Técnicos:**
-- Preço atual: R$ {current_price:.2f} (acima da média móvel de R$ {avg_price:.2f})
-- Resistência identificada em R$ {max_price:.2f}
-- Suporte forte em R$ {min_price:.2f}
-- Volatilidade: {volatility:.1f}% (moderada)
-
-**Volume e Momentum:**
-A análise de volume indica forte interesse comprador. Tendência de alta confirmada com {trend_up} sessões positivas nos últimos 7 dias.
-
-**Fundamentos:**
-{fundamental_text if fundamental_text else "Empresa sólida do setor, com bons indicadores fundamentalistas."} Expectativa de valorização no curto prazo.
-
-**Recomendação:** {recommendation} - Momento favorável para posições compradas."""
-
-    elif daily_variation > 0.5:
-        recommendation = "COMPRA"
-        sentiment = "bullish"
-        analysis = f"""✅ **Tendência de Alta Confirmada**
-
-{symbol} mantém trajetória positiva com variação de {daily_variation:+.2f}% hoje.
-
-**Análise Técnica:**
-- Preço: R$ {current_price:.2f} (tendência de alta)
-- Média móvel 30 dias: R$ {avg_price:.2f}
-- Range: R$ {min_price:.2f} - R$ {max_price:.2f}
-- Volatilidade controlada: {volatility:.1f}%
-
-**Projeção:**
-Sinais positivos indicam continuação do movimento de alta. {trend_up} de {len(recent_prices)} últimas sessões foram positivas.
-
-**Recomendação:** {recommendation} - Bom ponto de entrada para posições compradas."""
-
-    elif daily_variation > -0.5:
-        recommendation = "MANTER"
-        sentiment = "neutral"
-        analysis = f"""⚖️ **Movimento Lateral - Consolidação**
-
-{symbol} opera estável com leve variação de {daily_variation:+.2f}% no período.
-
-**Cenário Atual:**
-- Cotação: R$ {current_price:.2f}
-- Faixa de negociação: R$ {min_price:.2f} - R$ {max_price:.2f}
-- Volatilidade: {volatility:.1f}%
-
-**Análise:**
-Ação em fase de consolidação. Mercado aguarda catalisadores para definir próxima direção. Equilíbrio entre compradores e vendedores.
-
-**Padrão Técnico:**
-Movimento lateral pode preceder rompimento. Monitorar volumes para identificar direção.
-
-**Recomendação:** {recommendation} - Aguardar definição de tendência antes de novas posições."""
-
-    elif daily_variation > -2:
-        recommendation = "ATENÇÃO"
-        sentiment = "bearish"
-        analysis = f"""⚠️ **Correção Técnica em Andamento**
-
-{symbol} apresenta correção de {daily_variation:.2f}% hoje. Movimento dentro do esperado.
-
-**Análise de Risco:**
-- Preço atual: R$ {current_price:.2f}
-- Suporte importante em R$ {min_price:.2f}
-- Resistência em R$ {max_price:.2f}
-- Volatilidade aumentada: {volatility:.1f}%
-
-**Contexto:**
-Correção saudável após movimento de alta. {trend_down} sessões negativas recentes indicam realização de lucros.
-
-**Níveis Críticos:**
-Importante observar o suporte em R$ {min_price:.2f}. Rompimento pode acelerar queda.
-
-**Recomendação:** {recommendation} - Cautela. Aguardar estabilização antes de novas compras. Stop loss recomendado."""
-
-    else:
-        recommendation = "VENDA"
-        sentiment = "bearish"
-        analysis = f"""🔴 **Alerta de Risco - Pressão Vendedora**
-
-{symbol} em forte queda de {daily_variation:.2f}% no dia. Sinal de alerta acionado.
-
-**Indicadores de Risco:**
-- Preço: R$ {current_price:.2f} (tendência de baixa forte)
-- Rompeu suporte de R$ {min_price + (max_price - min_price) * 0.2:.2f}
-- Volatilidade elevada: {volatility:.1f}%
-- Pressão vendedora intensa
-
-**Análise Técnica:**
-{trend_down} das últimas {len(recent_prices)} sessões foram negativas. Momento desfavorável.
-
-**Gestão de Risco:**
-Recomenda-se proteção de posições. Mercado pode testar novos patamares de suporte.
-
-**Próximos Suportes:**
-R$ {min_price:.2f} (crítico) | R$ {min_price * 0.95:.2f} (extensão)
-
-**Recomendação:** {recommendation} - Reduzir exposição. Aguardar reversão de tendência."""
-
-    # Adicionar insights específicos por ação
-    sector_insights = {
-        "PETR4": "Setor de petróleo sensível a preços internacionais do barril.",
-        "VALE3": "Mineradora impactada por demanda chinesa e preço do minério de ferro.",
-        "ITUB4": "Setor financeiro beneficiado por ambiente de juros elevados.",
-        "WEGE3": "Indústria de motores elétricos com forte demanda internacional.",
-        "BBAS3": "Banco estatal com solidez e dividendos atrativos."
-    }
-    
-    sector_note = sector_insights.get(symbol, "Ação com boa liquidez no mercado brasileiro.")
-    
-    return {
-        "symbol": symbol,
-        "recommendation": recommendation,
-        "sentiment": sentiment,
-        "confidence": round(random.uniform(75, 95), 1),
-        "analysis": analysis,
-        "sectorInsight": sector_note,
-        "generatedAt": datetime.now().isoformat(),
-        "disclaimer": "Análise automatizada para fins educacionais. Não é recomendação de investimento."
-    }
-
 async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: str, fundamentals: dict, history: list) -> dict:
     """
     Gera análise de IA REAL usando OpenAI GPT-4o
     
-    Utiliza dois perfis de analistas:
+    Utiliza TRÊS perfis de analistas:
     1. Fundamentalista (Warren) - Buy & Hold
     2. Técnico (Trader) - Swing Trade
+    3. Volatilidade (Viper) - Day Trade
     
     Retorna JSON estruturado com scores e recomendações
     """
     import json
     
-    # System Prompt Mestre (dois analistas)
-    system_prompt = """Você é um comitê de dois analistas financeiros de elite da B3:
+    # System Prompt Mestre (TRÊS analistas)
+    system_prompt = """Você é um comitê de TRÊS analistas financeiros de elite:
 
-1. **Analista Fundamentalista (Warren):** Especialista em 'Buy & Hold'. 
+1. **Analista Fundamentalista (Warren):** Focado em 'Buy & Hold' (longo prazo, anos). 
+   Você ignora volatilidade diária. Sua análise foca EXCLUSIVAMENTE em fundamentalismo (P/L, P/VP, ROE, Dividend Yield e Dívida).
    
-   **CAMPOS DISPONÍVEIS NOS DADOS (use exatamente esses nomes):**
+   **CAMPOS DISPONÍVEIS NOS DADOS:**
    - indicators_pl (P/L - Preço/Lucro)
    - indicators_pvp (P/VP - Preço/Valor Patrimonial)
    - indicators_roe (ROE - Retorno sobre Patrimônio)
@@ -1025,30 +801,25 @@ async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: st
    - indicators_marg_liquida (Margem Líquida %)
    - indicators_div_br_patrim (Dívida Bruta/Patrimônio)
    - indicators_cresc_rec (Crescimento de Receita %)
-   - min_52_weeks, max_52_weeks (Mínimas e Máximas 52 semanas)
-   - market_value, company_value (Valor de mercado e empresa)
-   
-   **IMPORTANTE:** 
-   - Se todos esses campos forem null/ausentes, dê score 0 e explique a falta de dados
-   - Se houver PELO MENOS 3 campos válidos, faça uma análise com score ≥ 4
-   - Se houver ≥ 5 campos válidos, dê score entre 5-10 baseado nos valores
 
-2. **Analista Técnico (Trader):** Especialista em 'Swing Trade'.
-   
-   Você SEMPRE terá histórico de preços dos últimos 90 dias. Analise:
-   - Tendência geral (alta, baixa, lateral)
-   - Médias móveis (7 dias, 21 dias, 50 dias)
-   - Volatilidade (diferença entre máxima e mínima)
-   - Momentum (últimos 7 dias vs 21 dias)
-   - Suporte e resistência visíveis no gráfico
+2. **Analista Técnico (Trader):** Focado em 'Swing Trade' (médio prazo, semanas/meses). 
+   Você usa o histórico de 90 dias para identificar tendências, médias móveis, suporte e resistência.
+
+3. **Analista de Volatilidade (Viper):** Focado em 'Day Trade' (curto prazo, 1-2 dias). 
+   Você analisa a volatilidade, oscillations_day e os min_52_weeks/max_52_weeks para oportunidades rápidas.
+
+**REGRA CRÍTICA DE LÓGICA:** Sua análise técnica (suporte/resistência) DEVE ser 100% coerente com o currentPrice (preço atual) fornecido. 
+Nunca diga que uma resistência (teto) é MENOR que o preço atual. Use o currentPrice como sua âncora para definir suportes (abaixo) e resistências (acima).
 
 **Sua tarefa:** Analisar os dados fornecidos e retornar um JSON ESTRITO:
 
 {
   "buy_and_hold_score": 7.5,
-  "buy_and_hold_summary": "Análise em português (máximo 120 palavras). Mencione indicadores específicos usados.",
+  "buy_and_hold_summary": "Análise fundamentalista (1-2 frases).",
   "swing_trade_score": 8.0,
-  "swing_trade_summary": "Análise em português (máximo 120 palavras). Mencione tendência e níveis técnicos.",
+  "swing_trade_summary": "Análise técnica de médio prazo (1-2 frases).",
+  "day_trade_score": 6.5,
+  "day_trade_summary": "Análise de volatilidade de curto prazo (1-2 frases).",
   "recommendation": "COMPRA FORTE"
 }
 
@@ -1060,10 +831,7 @@ async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: st
 - 10: Excelente (altamente recomendado)
 
 **Opções de Recommendation:**
-COMPRA FORTE | COMPRA | MANTER | VENDA | VENDA FORTE
-
-**REGRA CRÍTICA:** SEMPRE dê scores > 0 para swing_trade (você sempre tem dados de preço).
-Para buy_and_hold, se não houver fundamentals, dê score 0 e explique.
+COMPRA FORTE | COMPRA | MANTER | VENDA
 
 RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
 
@@ -1105,7 +873,7 @@ Analise estes dados e retorne o JSON conforme especificado."""
         ai_response = json.loads(response.choices[0].message.content)
         
         print(f"[AI] Análise gerada com sucesso para {symbol}")
-        print(f"[AI] Scores: Buy&Hold={ai_response.get('buy_and_hold_score')}, SwingTrade={ai_response.get('swing_trade_score')}")
+        print(f"[AI] Scores: Buy&Hold={ai_response.get('buy_and_hold_score')}, SwingTrade={ai_response.get('swing_trade_score')}, DayTrade={ai_response.get('day_trade_score')}")
         
         # Validar campos obrigatórios
         required_fields = [
@@ -1113,6 +881,8 @@ Analise estes dados e retorne o JSON conforme especificado."""
             "buy_and_hold_summary",
             "swing_trade_score",
             "swing_trade_summary",
+            "day_trade_score",
+            "day_trade_summary",
             "recommendation"
         ]
         
@@ -1127,6 +897,8 @@ Analise estes dados e retorne o JSON conforme especificado."""
             "buyAndHoldSummary": ai_response["buy_and_hold_summary"],
             "swingTradeScore": float(ai_response["swing_trade_score"]),
             "swingTradeSummary": ai_response["swing_trade_summary"],
+            "dayTradeScore": float(ai_response["day_trade_score"]),
+            "dayTradeSummary": ai_response["day_trade_summary"],
             "recommendation": ai_response["recommendation"],
             "generatedAt": datetime.now().isoformat()
         }
@@ -1140,6 +912,8 @@ Analise estes dados e retorne o JSON conforme especificado."""
             "buyAndHoldSummary": f"Erro ao gerar análise fundamentalista. Tente novamente. Erro: {str(e)[:100]}",
             "swingTradeScore": 5.0,
             "swingTradeSummary": f"Erro ao gerar análise técnica. Tente novamente. Erro: {str(e)[:100]}",
+            "dayTradeScore": 5.0,
+            "dayTradeSummary": f"Erro ao gerar análise de volatilidade. Tente novamente. Erro: {str(e)[:100]}",
             "recommendation": "MANTER",
             "generatedAt": datetime.now().isoformat()
         }
@@ -1170,13 +944,14 @@ async def get_cached_analysis(symbol: str):
 async def analyze_stock(request: AIAnalysisRequest):
     """
     Gera nova análise de IA REAL usando OpenAI GPT-4o
-    Substitui o mock por análise profissional com dois perfis:
+    Análise profissional com TRÊS perfis:
     - Analista Fundamentalista (Buy & Hold)
     - Analista Técnico (Swing Trade)
+    - Analista de Volatilidade (Day Trade)
     """
     # Log simplificado
     fund_count = len(request.fundamentals) if request.fundamentals else 0
-    print(f"\n[AI] Gerando análise para {request.symbol} (Fundamentals: {fund_count} indicadores)")
+    print(f"\n[AI] Gerando análise TRIPLA para {request.symbol} (Fundamentals: {fund_count} indicadores)")
     
     # Gerar análise REAL (não mock!)
     analysis = await generate_real_ai_analysis(
@@ -1195,7 +970,7 @@ async def analyze_stock(request: AIAnalysisRequest):
         "timestamp": datetime.now()
     }
     
-    print(f"[AI CACHE] Análise REAL gerada e armazenada: {cache_key}")
+    print(f"[AI CACHE] Análise TRIPLA gerada e armazenada: {cache_key}")
     
     return analysis
 
@@ -1203,73 +978,125 @@ async def analyze_stock(request: AIAnalysisRequest):
 
 class ChatMessage(BaseModel):
     message: str
-    context: dict = None
+    context: dict | None = None
 
 @app.post("/api/ai/chat")
 async def chat_with_assistant(request: ChatMessage):
     """
     Chat em tempo real com o Taze AI Assistant (OpenAI GPT-4)
+    Usa Function Calling para buscar dados de ações quando necessário
     """
     try:
         # System prompt poderoso para o assistente financeiro
         system_prompt = """Você é o Taze AI, um analista financeiro sênior especialista em ações da B3 (Bolsa de Valores brasileira).
 
+**Ações Disponíveis:** PETR4, BBAS3, VALE3, MGLU3, WEGE3
+
 **Sua Personalidade:**
 - Profissional, mas acessível e amigável
 - Conciso e direto ao ponto
-- Usa dados técnicos e fundamentalistas para justificar opiniões
+- Usa dados reais quando disponíveis
 - Responde em Português do Brasil
-- Usa emojis ocasionalmente para deixar a conversa mais leve
-
-**Suas Habilidades:**
-- Análise técnica (suporte, resistência, médias móveis, volume)
-- Análise fundamentalista (P/L, dividend yield, ROE)
-- Interpretação de notícias do mercado
-- Gestão de risco e estratégias de investimento
-- Conhecimento profundo sobre empresas da B3
-
-**Formato de Resposta:**
-- Use Markdown para formatação (negrito, listas, etc.)
-- Seja objetivo: máximo 200 palavras por resposta
-- Sempre termine com uma recomendação clara ou próximo passo
+- Usa emojis ocasionalmente
 
 **Importante:**
-- Você NÃO é uma recomendação formal de investimento
-- Sempre lembre o usuário de fazer sua própria análise
-- Use disclaimer quando apropriado: "Esta é uma análise educacional, não recomendação de compra/venda"
+- Quando o usuário perguntar sobre uma ação específica, você pode buscar dados em tempo real usando a função disponível
+- Sempre lembre que você NÃO é uma recomendação formal de investimento
+- Seja objetivo: máximo 200 palavras por resposta
 """
 
-        # Construir mensagem do usuário com contexto (se fornecido)
-        user_message = request.message
+        # Definir tools (functions) disponíveis para a IA
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_stock_data",
+                    "description": "Busca dados em tempo real de uma ação da B3 (preço atual, variação, setor, fundamentais)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "symbol": {
+                                "type": "string",
+                                "description": "Símbolo da ação (ex: PETR4, VALE3, BBAS3, MGLU3, WEGE3)",
+                                "enum": ["PETR4", "BBAS3", "VALE3", "MGLU3", "WEGE3"]
+                            }
+                        },
+                        "required": ["symbol"]
+                    }
+                }
+            }
+        ]
         
-        if request.context:
-            # Adicionar contexto da ação que o usuário está visualizando
-            context_info = f"""
-**Contexto da Tela do Usuário:**
-- Ação: {request.context.get('symbol', 'N/A')} - {request.context.get('name', 'N/A')}
-- Preço Atual: R$ {request.context.get('currentPrice', 0):.2f}
-- Variação Diária: {request.context.get('dailyVariation', 0):+.2f}%
-- Setor: {request.context.get('sector', 'N/A')}
-
-O usuário está visualizando esta ação no momento. Use essas informações para contextualizar sua resposta.
-
-**Pergunta do Usuário:**
-{user_message}
-"""
-            user_message = context_info
-        
-        # Chamar OpenAI GPT-4
+        # Primeira chamada à IA
         response = openai_client.chat.completions.create(
-            model="gpt-4o",  # ou gpt-3.5-turbo para economizar
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": request.message}
             ],
+            tools=tools,
+            tool_choice="auto",  # IA decide se precisa chamar função
             max_tokens=500,
             temperature=0.7,
         )
         
-        assistant_reply = response.choices[0].message.content
+        response_message = response.choices[0].message
+        
+        # Verificar se a IA quer chamar uma função
+        if response_message.tool_calls:
+            # Executar a função solicitada
+            tool_call = response_message.tool_calls[0]
+            function_name = tool_call.function.name
+            
+            if function_name == "get_stock_data":
+                import json
+                function_args = json.loads(tool_call.function.arguments)
+                symbol = function_args.get("symbol")
+                
+                print(f"[CHAT] IA solicitou dados de {symbol}")
+                
+                # Buscar dados da ação
+                auth = (TRADEBOX_API_USER, TRADEBOX_API_PASS)
+                stock_data = await get_aggregated_stock_data(symbol, auth)
+                
+                if stock_data:
+                    function_response = json.dumps({
+                        "symbol": stock_data.get("symbol"),
+                        "name": stock_data.get("name"),
+                        "currentPrice": stock_data.get("currentPrice"),
+                        "dailyVariation": stock_data.get("dailyVariation"),
+                        "sector": stock_data.get("sector"),
+                        "fundamentals": {
+                            "pl": stock_data.get("fundamentals", {}).get("indicators_pl"),
+                            "pvp": stock_data.get("fundamentals", {}).get("indicators_pvp"),
+                            "dividend_yield": stock_data.get("fundamentals", {}).get("indicators_div_yield"),
+                            "roe": stock_data.get("fundamentals", {}).get("indicators_roe")
+                        }
+                    }, ensure_ascii=False)
+                else:
+                    function_response = json.dumps({"error": "Dados não disponíveis no momento"})
+                
+                # Segunda chamada com o resultado da função
+                second_response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": request.message},
+                        response_message,
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": function_response
+                        }
+                    ],
+                    max_tokens=500,
+                    temperature=0.7,
+                )
+                
+                assistant_reply = second_response.choices[0].message.content
+        else:
+            # Resposta direta sem função
+            assistant_reply = response_message.content
         
         return {
             "success": True,
@@ -1279,6 +1106,9 @@ O usuário está visualizando esta ação no momento. Use essas informações pa
         }
         
     except Exception as e:
+        print(f"[CHAT ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "message": f"Desculpe, ocorreu um erro: {str(e)}",

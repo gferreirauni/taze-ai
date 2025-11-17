@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bot, TrendingUp, TrendingDown, Sparkles, RefreshCw, Target, Activity } from 'lucide-react'
+import { Bot, TrendingUp, TrendingDown, Sparkles, RefreshCw, Landmark, Zap } from 'lucide-react'
 
 interface Stock {
   symbol: string
@@ -18,6 +18,8 @@ interface AIAnalysisResponse {
   buyAndHoldSummary: string
   swingTradeScore: number
   swingTradeSummary: string
+  dayTradeScore: number
+  dayTradeSummary: string
   recommendation: string
   generatedAt: string
 }
@@ -178,51 +180,74 @@ export default function AIInsights({ stock }: AIInsightsProps) {
             </div>
           </div>
 
-          {/* Score Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Score Cards - 3 Tipos de Análise */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {/* Buy & Hold Score */}
-            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-lg font-bold text-white">Buy & Hold</h3>
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Landmark className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">Buy & Hold</h3>
               </div>
               
-              <div className="flex items-end gap-3 mb-4">
-                <div className={`text-5xl font-bold ${getScoreColor(analysis.buyAndHoldScore)}`}>
+              <div className="flex items-end gap-2 mb-3">
+                <div className={`text-4xl font-bold ${getScoreColor(analysis.buyAndHoldScore)}`}>
                   {analysis.buyAndHoldScore.toFixed(1)}
                 </div>
-                <div className="text-sm text-zinc-500 mb-2">/ 10</div>
+                <div className="text-xs text-zinc-500 mb-1">/ 10</div>
               </div>
 
-              <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${getScoreColor(analysis.buyAndHoldScore)} bg-opacity-10`}>
+              <div className={`inline-block px-2 py-1 rounded-full text-xs font-semibold mb-3 ${getScoreColor(analysis.buyAndHoldScore)} bg-opacity-10`}>
                 {getScoreLabel(analysis.buyAndHoldScore)}
               </div>
 
-              <p className="text-sm text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-400 leading-relaxed">
                 {analysis.buyAndHoldSummary}
               </p>
             </div>
 
             {/* Swing Trade Score */}
-            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="w-5 h-5 text-blue-400" />
-                <h3 className="text-lg font-bold text-white">Swing Trade</h3>
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-5 h-5 text-blue-400" />
+                <h3 className="text-base font-bold text-white">Swing Trade</h3>
               </div>
               
-              <div className="flex items-end gap-3 mb-4">
-                <div className={`text-5xl font-bold ${getScoreColor(analysis.swingTradeScore)}`}>
+              <div className="flex items-end gap-2 mb-3">
+                <div className={`text-4xl font-bold ${getScoreColor(analysis.swingTradeScore)}`}>
                   {analysis.swingTradeScore.toFixed(1)}
                 </div>
-                <div className="text-sm text-zinc-500 mb-2">/ 10</div>
+                <div className="text-xs text-zinc-500 mb-1">/ 10</div>
               </div>
 
-              <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${getScoreColor(analysis.swingTradeScore)} bg-opacity-10`}>
+              <div className={`inline-block px-2 py-1 rounded-full text-xs font-semibold mb-3 ${getScoreColor(analysis.swingTradeScore)} bg-opacity-10`}>
                 {getScoreLabel(analysis.swingTradeScore)}
               </div>
 
-              <p className="text-sm text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-400 leading-relaxed">
                 {analysis.swingTradeSummary}
+              </p>
+            </div>
+
+            {/* Day Trade Score */}
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Day Trade</h3>
+              </div>
+              
+              <div className="flex items-end gap-2 mb-3">
+                <div className={`text-4xl font-bold ${getScoreColor(analysis.dayTradeScore)}`}>
+                  {analysis.dayTradeScore.toFixed(1)}
+                </div>
+                <div className="text-xs text-zinc-500 mb-1">/ 10</div>
+              </div>
+
+              <div className={`inline-block px-2 py-1 rounded-full text-xs font-semibold mb-3 ${getScoreColor(analysis.dayTradeScore)} bg-opacity-10`}>
+                {getScoreLabel(analysis.dayTradeScore)}
+              </div>
+
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                {analysis.dayTradeSummary}
               </p>
             </div>
           </div>
