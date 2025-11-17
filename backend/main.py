@@ -128,13 +128,18 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             asset_info = info_data["data"][0] if info_data and "data" in info_data else {}
             
             # Intraday (primeiro item é o mais recente)
-            intraday_latest = intraday_data["data"][0] if intraday_data and "data" in intraday_data else {}
+            intraday_latest = intraday_data["data"][0] if intraday_data and "data" in intraday_data and len(intraday_data["data"]) > 0 else {}
             
             # Debug: Verificar intraday
             print(f"\n[TRADEBOX] === INTRADAY DATA para {symbol} ===")
-            print(f"[TRADEBOX] Campos do intraday: {list(intraday_latest.keys())}")
-            import json
-            print(f"[TRADEBOX] Valores: {json.dumps(intraday_latest, indent=2, ensure_ascii=False)[:500]}")
+            if intraday_data:
+                print(f"[TRADEBOX] Response intraday: {intraday_data}")
+            print(f"[TRADEBOX] Campos do intraday: {list(intraday_latest.keys()) if intraday_latest else 'VAZIO!'}")
+            if intraday_latest:
+                import json
+                print(f"[TRADEBOX] Valores: {json.dumps(intraday_latest, indent=2, ensure_ascii=False)[:500]}")
+            else:
+                print(f"[TRADEBOX] ⚠️ INTRADAY VAZIO! Usando dados do histórico...")
             
             # Histórico (mapear para formato esperado)
             history = []
@@ -173,19 +178,31 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
                 if price_30_days_ago > 0:
                     month_variation = ((current_price - price_30_days_ago) / price_30_days_ago) * 100
             
+            # CORREÇÃO: Se intraday estiver vazio, usar dados do histórico e fundamentals
+            if not intraday_latest or not intraday_latest.get("price"):
+                print(f"[TRADEBOX] ⚠️ Intraday vazio para {symbol}, usando fallback (histórico + fundamentals)")
+                # Preço atual = último valor do histórico
+                current_price_value = history[-1]["value"] if history else 0
+                # Variação diária = oscillations_day dos fundamentals
+                daily_variation_value = fundamentals.get("oscillations_day", 0) if fundamentals else 0
+            else:
+                # Usar dados do intraday normalmente
+                current_price_value = float(intraday_latest.get("price", 0))
+                daily_variation_value = float(intraday_latest.get("percent", 0))
+            
             # Montar resultado agregado
             result = {
                 "symbol": asset_info.get("asset_code", symbol),
                 "name": asset_info.get("company", symbol),
                 "sector": asset_info.get("sector", "N/A"),
-                "currentPrice": round(float(intraday_latest.get("price", 0)), 2),
-                "dailyVariation": round(float(intraday_latest.get("percent", 0)), 2),
+                "currentPrice": round(current_price_value, 2),
+                "dailyVariation": round(daily_variation_value, 2),
                 "monthVariation": round(month_variation, 2),
                 "history": history,
                 "fundamentals": fundamentals
             }
             
-            print(f"[TRADEBOX] ✅ Dados agregados: {symbol} - R$ {result['currentPrice']:.2f}")
+            print(f"[TRADEBOX] ✅ Dados finais: {symbol} - R$ {result['currentPrice']:.2f} ({result['dailyVariation']:+.2f}%) | Fundamentals: {len(fundamentals)} indicadores")
             return result
             
         except Exception as e:
@@ -1008,48 +1025,57 @@ async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: st
     # System Prompt Mestre (dois analistas)
     system_prompt = """Você é um comitê de dois analistas financeiros de elite da B3:
 
-1. **Analista Fundamentalista (Warren):** Especialista em 'Buy & Hold'. Você analisa:
-   - P/L (Preço/Lucro)
-   - P/VP (Preço/Valor Patrimonial)
-   - ROE (Retorno sobre Patrimônio)
-   - Dividend Yield (rendimento de dividendos)
-   - Dívida/Patrimônio
-   - Margem Líquida
-   - Crescimento de receita
+1. **Analista Fundamentalista (Warren):** Especialista em 'Buy & Hold'. 
+   
+   **CAMPOS DISPONÍVEIS NOS DADOS (use exatamente esses nomes):**
+   - indicators_pl (P/L - Preço/Lucro)
+   - indicators_pvp (P/VP - Preço/Valor Patrimonial)
+   - indicators_roe (ROE - Retorno sobre Patrimônio)
+   - indicators_div_yield (Dividend Yield %)
+   - indicators_roic (ROIC %)
+   - indicators_marg_liquida (Margem Líquida %)
+   - indicators_div_br_patrim (Dívida Bruta/Patrimônio)
+   - indicators_cresc_rec (Crescimento de Receita %)
+   - min_52_weeks, max_52_weeks (Mínimas e Máximas 52 semanas)
+   - market_value, company_value (Valor de mercado e empresa)
+   
+   **IMPORTANTE:** 
+   - Se todos esses campos forem null/ausentes, dê score 0 e explique a falta de dados
+   - Se houver PELO MENOS 3 campos válidos, faça uma análise com score ≥ 4
+   - Se houver ≥ 5 campos válidos, dê score entre 5-10 baseado nos valores
 
-2. **Analista Técnico (Trader):** Especialista em 'Swing Trade'. Você analisa:
-   - Histórico de preços (90 dias)
-   - Tendências (alta, baixa, lateral)
-   - Médias móveis (7d, 21d, 50d)
-   - RSI (Relative Strength Index)
-   - Volatilidade
-   - Suporte e resistência
+2. **Analista Técnico (Trader):** Especialista em 'Swing Trade'.
+   
+   Você SEMPRE terá histórico de preços dos últimos 90 dias. Analise:
+   - Tendência geral (alta, baixa, lateral)
+   - Médias móveis (7 dias, 21 dias, 50 dias)
+   - Volatilidade (diferença entre máxima e mínima)
+   - Momentum (últimos 7 dias vs 21 dias)
+   - Suporte e resistência visíveis no gráfico
 
-Sua tarefa é analisar os dados fornecidos e retornar um JSON ESTRITO com esta estrutura:
+**Sua tarefa:** Analisar os dados fornecidos e retornar um JSON ESTRITO:
 
 {
   "buy_and_hold_score": 7.5,
-  "buy_and_hold_summary": "Análise fundamentalista em português (máximo 150 palavras)",
+  "buy_and_hold_summary": "Análise em português (máximo 120 palavras). Mencione indicadores específicos usados.",
   "swing_trade_score": 8.0,
-  "swing_trade_summary": "Análise técnica em português (máximo 150 palavras)",
+  "swing_trade_summary": "Análise em português (máximo 120 palavras). Mencione tendência e níveis técnicos.",
   "recommendation": "COMPRA FORTE"
 }
 
-Critérios de Score:
+**Critérios de Score:**
 - 0-3: Ruim (evitar)
 - 4-5: Fraco (cautela)
 - 6-7: Razoável (considerar)
 - 8-9: Bom (recomendado)
 - 10: Excelente (altamente recomendado)
 
-Opções de Recommendation:
-- COMPRA FORTE
-- COMPRA
-- MANTER
-- VENDA
-- VENDA FORTE
+**Opções de Recommendation:**
+COMPRA FORTE | COMPRA | MANTER | VENDA | VENDA FORTE
 
-Seja objetivo, técnico e baseie-se APENAS nos dados fornecidos.
+**REGRA CRÍTICA:** SEMPRE dê scores > 0 para swing_trade (você sempre tem dados de preço).
+Para buy_and_hold, se não houver fundamentals, dê score 0 e explique.
+
 RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
 
     # User Prompt (dados da ação)
@@ -1164,8 +1190,15 @@ async def analyze_stock(request: AIAnalysisRequest):
     print(f"[AI DEBUG] Fundamentals recebido? {request.fundamentals is not None}")
     print(f"[AI DEBUG] Fundamentals vazio? {request.fundamentals == {} if request.fundamentals else 'None'}")
     if request.fundamentals:
-        print(f"[AI DEBUG] Keys dos fundamentals: {list(request.fundamentals.keys())[:10]}")  # Primeiras 10 keys
         print(f"[AI DEBUG] Total de indicadores: {len(request.fundamentals)}")
+        # Mostrar indicadores importantes
+        important = {
+            'indicators_pl': request.fundamentals.get('indicators_pl'),
+            'indicators_div_yield': request.fundamentals.get('indicators_div_yield'),
+            'indicators_roe': request.fundamentals.get('indicators_roe'),
+            'indicators_pvp': request.fundamentals.get('indicators_pvp')
+        }
+        print(f"[AI DEBUG] Indicadores chave: {important}")
     
     # Gerar análise REAL (não mock!)
     analysis = await generate_real_ai_analysis(
