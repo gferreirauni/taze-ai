@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Calendar } from 'lucide-react'
 
 interface HistoryData {
   date: string
@@ -16,40 +17,88 @@ interface StockChartProps {
   monthVariation?: number
 }
 
-type Period = 7 | 15 | 30 | 90
+type Period = 7 | 15 | 30 | 90 | 'custom'
 
 export default function StockChart({ data, stockName, stockSymbol, currentPrice, monthVariation }: StockChartProps) {
   // Estado para controlar o período selecionado (padrão: 30 dias)
   const [selectedPeriod, setSelectedPeriod] = useState<Period>(30)
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [showCustomPicker, setShowCustomPicker] = useState(false)
 
-  // Filtrar dados baseado no período selecionado
-  const filteredData = data.slice(-selectedPeriod)
+  // Filtrar dados baseado no período selecionado (usando DATAS reais, não quantidade de registros)
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0) return []
+
+    // Pegar a data mais recente (última do array)
+    const lastDate = new Date(data[data.length - 1].date)
+    
+    let startDate: Date
+
+    if (selectedPeriod === 'custom') {
+      // Usar datas customizadas se selecionado
+      if (!customStartDate || !customEndDate) return data
+      startDate = new Date(customStartDate)
+      const endDate = new Date(customEndDate)
+      
+      return data.filter(item => {
+        const itemDate = new Date(item.date)
+        return itemDate >= startDate && itemDate <= endDate
+      })
+    } else {
+      // Calcular data de início baseado no período (dias de CALENDÁRIO)
+      startDate = new Date(lastDate)
+      startDate.setDate(startDate.getDate() - selectedPeriod)
+    }
+
+    // Filtrar todos os registros a partir da data calculada
+    return data.filter(item => {
+      const itemDate = new Date(item.date)
+      return itemDate >= startDate
+    })
+  }, [data, selectedPeriod, customStartDate, customEndDate])
 
   // Formatar data para exibição (mostrar apenas dia/mês)
-  const formattedData = filteredData.map(item => ({
-    ...item,
-    displayDate: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  }))
+  const formattedData = useMemo(() => {
+    return filteredData.map(item => ({
+      ...item,
+      displayDate: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    }))
+  }, [filteredData])
 
-  // Calcular variação baseada no período selecionado
-  const calculateVariation = (period: Period) => {
-    const periodData = data.slice(-period)
-    if (periodData.length < 2) return 0
+  // Calcular variação baseada nos dados filtrados
+  const variation = useMemo(() => {
+    if (filteredData.length < 2) return 0
     
-    const firstValue = periodData[0].value
-    const lastValue = periodData[periodData.length - 1].value
+    const firstValue = filteredData[0].value
+    const lastValue = filteredData[filteredData.length - 1].value
     return ((lastValue - firstValue) / firstValue) * 100
-  }
+  }, [filteredData])
 
   // Usar currentPrice do backend ou último valor do histórico
   const lastValue = currentPrice || data[data.length - 1]?.value || 0
-  
-  // Variação baseada no período selecionado
-  const variation = calculateVariation(selectedPeriod)
   const isPositive = variation >= 0
 
   // Opções de período
   const periods: Period[] = [7, 15, 30, 90]
+
+  // Handler para aplicar datas customizadas
+  const handleCustomDateApply = () => {
+    if (customStartDate && customEndDate) {
+      setSelectedPeriod('custom')
+      setShowCustomPicker(false)
+    }
+  }
+
+  // Formatar label do período
+  const getPeriodLabel = () => {
+    if (selectedPeriod === 'custom') {
+      const start = new Date(customStartDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      const end = new Date(customEndDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      return `${start} - ${end}`
+    }
+    return `${selectedPeriod}d`
+  }
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
@@ -64,18 +113,21 @@ export default function StockChart({ data, stockName, stockSymbol, currentPrice,
               R$ {lastValue.toFixed(2)}
             </p>
             <p className={`text-sm font-semibold ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isPositive ? '+' : ''}{variation.toFixed(2)}% ({selectedPeriod}d)
+              {isPositive ? '+' : ''}{variation.toFixed(2)}% ({getPeriodLabel()})
             </p>
           </div>
         </div>
 
         {/* Filtros de Período */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-zinc-500 mr-2">Período:</span>
           {periods.map((period) => (
             <button
               key={period}
-              onClick={() => setSelectedPeriod(period)}
+              onClick={() => {
+                setSelectedPeriod(period)
+                setShowCustomPicker(false)
+              }}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 selectedPeriod === period
                   ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
@@ -85,7 +137,63 @@ export default function StockChart({ data, stockName, stockSymbol, currentPrice,
               {period}d
             </button>
           ))}
+          
+          {/* Botão Personalizado */}
+          <button
+            onClick={() => setShowCustomPicker(!showCustomPicker)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              selectedPeriod === 'custom'
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+            }`}
+          >
+            <Calendar size={16} />
+            Personalizado
+          </button>
         </div>
+
+        {/* Seletor de Datas Customizado */}
+        {showCustomPicker && (
+          <div className="mt-4 p-4 bg-zinc-800 border border-zinc-700 rounded-lg">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Data Início</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  max={customEndDate || undefined}
+                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Data Fim</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  min={customStartDate || undefined}
+                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                onClick={handleCustomDateApply}
+                disabled={!customStartDate || !customEndDate}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed transition-all"
+              >
+                Aplicar
+              </button>
+              <button
+                onClick={() => setShowCustomPicker(false)}
+                className="px-4 py-2 bg-zinc-700 text-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-600 transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="h-80">
