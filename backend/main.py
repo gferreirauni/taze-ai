@@ -149,6 +149,13 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
             # Fundamentais (objeto inteiro)
             fundamentals = fundamentals_data["data"][0] if fundamentals_data and "data" in fundamentals_data else {}
             
+            # Debug: Verificar fundamentals
+            if fundamentals:
+                print(f"[TRADEBOX] ✅ Fundamentals recebidos para {symbol}: {len(fundamentals)} indicadores")
+                print(f"[TRADEBOX] Primeiros indicadores: {list(fundamentals.keys())[:5]}")
+            else:
+                print(f"[TRADEBOX] ⚠️ FUNDAMENTALS VAZIOS para {symbol}!")
+            
             # Calcular variação de 30 dias
             month_variation = 0
             if len(history) >= 30:
@@ -1143,6 +1150,14 @@ async def analyze_stock(request: AIAnalysisRequest):
     - Analista Fundamentalista (Buy & Hold)
     - Analista Técnico (Swing Trade)
     """
+    # Debug: Verificar dados recebidos
+    print(f"\n[AI DEBUG] === Recebido request para {request.symbol} ===")
+    print(f"[AI DEBUG] Fundamentals recebido? {request.fundamentals is not None}")
+    print(f"[AI DEBUG] Fundamentals vazio? {request.fundamentals == {} if request.fundamentals else 'None'}")
+    if request.fundamentals:
+        print(f"[AI DEBUG] Keys dos fundamentals: {list(request.fundamentals.keys())[:10]}")  # Primeiras 10 keys
+        print(f"[AI DEBUG] Total de indicadores: {len(request.fundamentals)}")
+    
     # Gerar análise REAL (não mock!)
     analysis = await generate_real_ai_analysis(
         symbol=request.symbol,

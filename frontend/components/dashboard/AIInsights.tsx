@@ -61,22 +61,34 @@ export default function AIInsights({ stock }: AIInsightsProps) {
     setLoading(true)
     setCached(false)
     
+    // Debug: Verificar se fundamentals estão presentes
+    console.log('[AI DEBUG] Stock completo:', stock)
+    console.log('[AI DEBUG] Fundamentals:', stock.fundamentals)
+    console.log('[AI DEBUG] Fundamentals existe?', !!stock.fundamentals)
+    console.log('[AI DEBUG] Fundamentals vazio?', stock.fundamentals && Object.keys(stock.fundamentals).length === 0)
+    
     try {
+      const payload = {
+        symbol: stock.symbol,
+        currentPrice: stock.currentPrice,
+        dailyVariation: stock.dailyVariation,
+        history: stock.history,
+        fundamentals: stock.fundamentals || {}
+      }
+      
+      console.log('[AI DEBUG] Payload enviado:', payload)
+      console.log('[AI DEBUG] Fundamentals no payload:', payload.fundamentals)
+      
       const response = await fetch('http://localhost:8000/api/ai/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          symbol: stock.symbol,
-          currentPrice: stock.currentPrice,
-          dailyVariation: stock.dailyVariation,
-          history: stock.history,
-          fundamentals: stock.fundamentals
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
+      console.log('[AI DEBUG] Resposta recebida:', data)
       setAnalysis(data)
       setCached(true)
     } catch (error) {
