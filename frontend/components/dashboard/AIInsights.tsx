@@ -9,6 +9,7 @@ interface Stock {
   currentPrice: number
   dailyVariation: number
   history: { date: string; value: number }[]
+  fundamentals?: any  // Dados fundamentalistas da API Tradebox
 }
 
 interface AIAnalysis {
@@ -75,6 +76,7 @@ export default function AIInsights({ stock }: AIInsightsProps) {
           currentPrice: stock.currentPrice,
           dailyVariation: stock.dailyVariation,
           history: stock.history,
+          fundamentals: stock.fundamentals  // Incluir dados fundamentalistas
         }),
       })
 

@@ -10,6 +10,8 @@ from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
 import re
+import httpx
+import asyncio
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -17,7 +19,12 @@ load_dotenv()
 # Instanciar cliente OpenAI
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Configurar Brapi (API Brasileira para B3)
+# Configurar Tradebox API (API Interna)
+TRADEBOX_API_USER = os.getenv("TRADEBOX_API_USER", "TradeBox")
+TRADEBOX_API_PASS = os.getenv("TRADEBOX_API_PASS", "TradeBoxAI@2025")
+TRADEBOX_BASE_URL = "https://api.tradebox.com.br/v1"
+
+# Configurar Brapi (API Brasileira para B3 - Backup)
 BRAPI_TOKEN = os.getenv("BRAPI_TOKEN", "")
 BRAPI_BASE_URL = "https://brapi.dev/api"
 
@@ -68,10 +75,106 @@ def update_cache(data):
     stocks_cache["data"] = data
     stocks_cache["timestamp"] = datetime.now()
 
-# ==================== DADOS REAIS COM YFINANCE ====================
+# ==================== DADOS REAIS COM TRADEBOX API ====================
 
 # Lista de ações da B3 que vamos monitorar
 B3_STOCKS = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3"]
+
+# Função para buscar dados agregados da API Tradebox
+async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
+    """
+    Faz 4 chamadas paralelas à API Tradebox e agrega os dados
+    
+    Endpoints:
+    1. /assetInformation/{symbol} - Info básica
+    2. /assetIntraday/{symbol} - Preço intraday
+    3. /assetHistories/{symbol} - Histórico
+    4. /assetFundamentals/{symbol} - Fundamentais
+    
+    Returns:
+        dict com dados agregados da ação
+    """
+    base_url = TRADEBOX_BASE_URL
+    
+    # URLs dos 4 endpoints
+    # OTIMIZAÇÃO: Solicitar apenas últimos 90 dias (3 meses) no histórico
+    urls = {
+        "info": f"{base_url}/assetInformation/{symbol}",
+        "intraday": f"{base_url}/assetIntraday/{symbol}",
+        "histories": f"{base_url}/assetHistories/{symbol}?range=3mo&interval=1d",  # ✅ Parâmetros de data
+        "fundamentals": f"{base_url}/assetFundamentals/{symbol}"
+    }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Fazer 4 requisições em paralelo
+        tasks = [
+            client.get(urls["info"], auth=httpx.BasicAuth(*auth)),
+            client.get(urls["intraday"], auth=httpx.BasicAuth(*auth)),
+            client.get(urls["histories"], auth=httpx.BasicAuth(*auth)),
+            client.get(urls["fundamentals"], auth=httpx.BasicAuth(*auth))
+        ]
+        
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Processar respostas
+        info_data = responses[0].json() if not isinstance(responses[0], Exception) else None
+        intraday_data = responses[1].json() if not isinstance(responses[1], Exception) else None
+        histories_data = responses[2].json() if not isinstance(responses[2], Exception) else None
+        fundamentals_data = responses[3].json() if not isinstance(responses[3], Exception) else None
+        
+        # Extrair dados de cada resposta
+        try:
+            # Info básica
+            asset_info = info_data["data"][0] if info_data and "data" in info_data else {}
+            
+            # Intraday (primeiro item é o mais recente)
+            intraday_latest = intraday_data["data"][0] if intraday_data and "data" in intraday_data else {}
+            
+            # Histórico (mapear para formato esperado)
+            history = []
+            if histories_data and "data" in histories_data:
+                # FALLBACK: Se API retornar mais de 90 dias, fazer slice aqui
+                history_raw = histories_data["data"]
+                # Limitar aos últimos 90 dias no backend (otimização de rede)
+                history_limited = history_raw[-90:] if len(history_raw) > 90 else history_raw
+                
+                for item in history_limited:
+                    history.append({
+                        "date": item.get("price_date", ""),
+                        "value": round(float(item.get("close", 0)), 2)
+                    })
+                
+                print(f"[TRADEBOX] Histórico limitado: {len(history)} dias (de {len(history_raw)} totais)")
+            
+            # Fundamentais (objeto inteiro)
+            fundamentals = fundamentals_data["data"][0] if fundamentals_data and "data" in fundamentals_data else {}
+            
+            # Calcular variação de 30 dias
+            month_variation = 0
+            if len(history) >= 30:
+                current_price = history[-1]["value"]
+                price_30_days_ago = history[-30]["value"]
+                if price_30_days_ago > 0:
+                    month_variation = ((current_price - price_30_days_ago) / price_30_days_ago) * 100
+            
+            # Montar resultado agregado
+            result = {
+                "symbol": asset_info.get("asset_code", symbol),
+                "name": asset_info.get("company", symbol),
+                "sector": asset_info.get("sector", "N/A"),
+                "currentPrice": round(float(intraday_latest.get("price", 0)), 2),
+                "dailyVariation": round(float(intraday_latest.get("percent", 0)), 2),
+                "monthVariation": round(month_variation, 2),
+                "history": history,
+                "fundamentals": fundamentals
+            }
+            
+            print(f"[TRADEBOX] ✅ Dados agregados: {symbol} - R$ {result['currentPrice']:.2f}")
+            return result
+            
+        except Exception as e:
+            print(f"[TRADEBOX ERROR] Erro ao processar {symbol}: {str(e)}")
+            return None
 
 def generate_mock_stock_data():
     """
@@ -495,7 +598,7 @@ async def get_news():
 @app.get("/api/stocks")
 async def get_stocks():
     """
-    Retorna lista de ações com dados REAIS da B3 via yfinance
+    Retorna lista de ações com dados REAIS da B3 via Tradebox API
     Implementa cache de 5 minutos para otimizar performance
     """
     # Verificar se o cache é válido
@@ -510,19 +613,58 @@ async def get_stocks():
         }
     
     # Cache expirado, buscar novos dados
-    print("[ATUALIZANDO] Cache expirado, buscando dados do yfinance...")
-    stocks_data = fetch_real_stock_data()
+    print("[ATUALIZANDO] Cache expirado, buscando dados da Tradebox API...")
     
-    # Atualizar cache
-    update_cache(stocks_data)
+    # Buscar dados de todas as ações em paralelo
+    auth = (TRADEBOX_API_USER, TRADEBOX_API_PASS)
     
-    return {
-        "stocks": stocks_data,
-        "timestamp": datetime.now().isoformat(),
-        "count": len(stocks_data),
-        "source": "brapi" if BRAPI_TOKEN else "fallback",
-        "cache_ttl_seconds": stocks_cache["ttl"]
-    }
+    try:
+        # Criar tasks para todas as ações
+        tasks = [get_aggregated_stock_data(symbol, auth) for symbol in B3_STOCKS]
+        
+        # Executar em paralelo
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filtrar resultados válidos (não None e não Exception)
+        stocks_data = [
+            result for result in results 
+            if result is not None and not isinstance(result, Exception)
+        ]
+        
+        # Se não conseguiu nenhuma ação, usar fallback
+        if len(stocks_data) == 0:
+            print("[TRADEBOX] Nenhuma ação encontrada, usando fallback...")
+            stocks_data = generate_mock_stock_data()
+        else:
+            print(f"[TRADEBOX] ✅ {len(stocks_data)} ações carregadas com sucesso")
+        
+        # Atualizar cache
+        update_cache(stocks_data)
+        
+        return {
+            "stocks": stocks_data,
+            "timestamp": datetime.now().isoformat(),
+            "count": len(stocks_data),
+            "source": "tradebox_api",
+            "cache_ttl_seconds": stocks_cache["ttl"]
+        }
+        
+    except Exception as e:
+        print(f"[TRADEBOX ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Usar fallback em caso de erro
+        stocks_data = generate_mock_stock_data()
+        update_cache(stocks_data)
+        
+        return {
+            "stocks": stocks_data,
+            "timestamp": datetime.now().isoformat(),
+            "count": len(stocks_data),
+            "source": "fallback",
+            "cache_ttl_seconds": stocks_cache["ttl"]
+        }
 
 @app.get("/api/stocks/{symbol}")
 async def get_stock_detail(symbol: str):
@@ -661,11 +803,13 @@ class AIAnalysisRequest(BaseModel):
     currentPrice: float
     dailyVariation: float
     history: list
+    fundamentals: dict = None
 
-def mock_ai_analysis(symbol: str, current_price: float, daily_variation: float, history: list):
+def mock_ai_analysis(symbol: str, current_price: float, daily_variation: float, history: list, fundamentals: dict = None):
     """
     Simula uma análise de IA realista baseada nos dados da ação
     Em produção, isso seria substituído por uma chamada real à OpenAI GPT-4
+    Agora usa dados fundamentalistas reais da API Tradebox!
     """
     
     # Calcular métricas adicionais
@@ -679,6 +823,32 @@ def mock_ai_analysis(symbol: str, current_price: float, daily_variation: float, 
     recent_prices = prices[-7:] if len(prices) >= 7 else prices
     trend_up = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] > recent_prices[i-1])
     trend_down = sum(1 for i in range(1, len(recent_prices)) if recent_prices[i] < recent_prices[i-1])
+    
+    # Extrair dados fundamentalistas (se disponíveis)
+    pl_ratio = None
+    div_yield = None
+    fundamental_text = ""
+    
+    if fundamentals:
+        pl_ratio = fundamentals.get("indicators_pl")
+        div_yield = fundamentals.get("indicators_div_yield")
+        
+        # Gerar texto fundamentalista
+        if pl_ratio is not None:
+            if pl_ratio < 10:
+                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Ação barata, potencial de valorização) "
+            elif pl_ratio < 20:
+                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Valuation razoável) "
+            else:
+                fundamental_text += f"**P/L:** {pl_ratio:.2f} (Ação cara, avaliar com cautela) "
+        
+        if div_yield is not None and div_yield > 0:
+            if div_yield > 6:
+                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Excelente rendimento!) "
+            elif div_yield > 3:
+                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Bom pagador de dividendos) "
+            else:
+                fundamental_text += f"**Dividend Yield:** {div_yield:.2f}% (Foco em crescimento) "
     
     # Determinar recomendação e análise
     if daily_variation > 2:
@@ -698,7 +868,7 @@ A ação {symbol} apresenta forte momentum de alta com variação de {daily_vari
 A análise de volume indica forte interesse comprador. Tendência de alta confirmada com {trend_up} sessões positivas nos últimos 7 dias.
 
 **Fundamentos:**
-Empresa sólida do setor, com bons indicadores fundamentalistas. Expectativa de valorização no curto prazo.
+{fundamental_text if fundamental_text else "Empresa sólida do setor, com bons indicadores fundamentalistas."} Expectativa de valorização no curto prazo.
 
 **Recomendação:** {recommendation} - Momento favorável para posições compradas."""
 
@@ -834,13 +1004,15 @@ async def analyze_stock(request: AIAnalysisRequest):
     """
     Gera nova análise de IA e salva em cache por dia
     Só deve ser chamado quando usuário clica em "Gerar/Atualizar Análise"
+    Agora usa dados fundamentalistas reais da API Tradebox!
     """
-    # Gerar análise
+    # Gerar análise (com fundamentals)
     analysis = mock_ai_analysis(
         request.symbol,
         request.currentPrice,
         request.dailyVariation,
-        request.history
+        request.history,
+        request.fundamentals  # Passar fundamentals da API
     )
     
     # Salvar em cache (por dia)
@@ -851,7 +1023,7 @@ async def analyze_stock(request: AIAnalysisRequest):
         "timestamp": datetime.now()
     }
     
-    print(f"[AI CACHE] Análise gerada e armazenada: {cache_key}")
+    print(f"[AI CACHE] Análise gerada e armazenada: {cache_key} (com fundamentals: {request.fundamentals is not None})")
     
     return analysis
 

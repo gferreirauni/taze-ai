@@ -433,8 +433,7 @@ openai_client.chat.completions.create(
 - **Custo estimado:** $0.01 - $0.05 por chat
 
 #### **Uso 2: Análise de Ações (futuro)**
-- **Atualmente:** Mockado (não usa OpenAI)
-- **Futuro:** Integração real com GPT-4 para análises
+- **Atualmente:** Integração real com GPT-4 para análises
 
 **Taxa de Uso (Chat):** ~10-50 req/dia (dependendo do usuário)
 

@@ -14,6 +14,7 @@ interface Stock {
   dailyVariation: number
   monthVariation: number
   history: { date: string; value: number }[]
+  fundamentals?: any  // Dados fundamentalistas da API Tradebox
 }
 
 export default function AnalisesPage() {
