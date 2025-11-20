@@ -5,9 +5,9 @@ import asyncio
 from datetime import datetime
 from typing import List
 
-from config import settings
-from feature_store import FeatureStore, bundle_to_feature_rows
-from tradebox_client import TradeboxClient
+from .config import settings
+from .feature_store import FeatureStore, bundle_to_feature_rows
+from .tradebox_client import TradeboxClient
 
 
 async def ingest_symbol(symbol: str, client: TradeboxClient, store: FeatureStore, range_days: int) -> None:

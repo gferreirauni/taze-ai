@@ -13,6 +13,12 @@ interface Stock {
   monthVariation: number
   history: { date: string; value: number }[]
   fundamentals?: any
+  predictiveSignals?: {
+    score?: number | null
+    raw_prediction?: number
+    horizon_days?: number
+    source?: string
+  }
   ai_analysis?: {
     buyAndHoldScore: number
     buyAndHoldSummary: string
@@ -33,6 +39,8 @@ interface AIScoreCardProps {
 export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardProps) {
   const [generating, setGenerating] = useState(false)
   const isPositive = stock.dailyVariation >= 0
+  const predictiveScore = typeof stock.predictiveSignals?.score === 'number' ? stock.predictiveSignals.score : null
+  const predictiveHorizon = stock.predictiveSignals?.horizon_days ?? 90
 
   const generateAnalysis = async () => {
     setGenerating(true)
@@ -112,6 +120,34 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
               {isPositive ? '+' : ''}{stock.dailyVariation.toFixed(2)}%
             </p>
           </div>
+        </div>
+
+        {/* Predictive Score */}
+        <div className="mb-4">
+          {predictiveScore !== null ? (
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-emerald-300 font-semibold">
+                  ML Proprietário · Taze Model
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Horizonte {predictiveHorizon} dias
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-emerald-300">
+                  {predictiveScore.toFixed(1)} <span className="text-sm text-emerald-200">/ 10</span>
+                </p>
+                <p className="text-[11px] text-zinc-400">
+                  {getScoreLabel(predictiveScore)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-3 rounded-2xl border border-dashed border-zinc-700 text-[11px] text-zinc-500">
+              Nosso modelo proprietário está treinando novos dados. Assim que disponível, o score preditivo aparecerá aqui.
+            </div>
+          )}
         </div>
 
         {/* Call to Action */}
@@ -199,22 +235,55 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
 
       {/* Scores Grid - 3 Colunas Modernas */}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        {/* Buy & Hold Score */}
+        {/* Buy & Hold Score + ML */}
         <div className="bg-zinc-800/30 backdrop-blur-sm border border-zinc-700/50 rounded-xl p-3 hover:bg-zinc-800/50 hover:border-emerald-500/30 transition-all duration-300">
-          <div className="flex items-center gap-1 mb-2">
-            <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs font-semibold text-zinc-400">Warren</span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1">
+              <Landmark className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-semibold text-zinc-400">Warren</span>
+            </div>
+            {predictiveScore !== null && (
+              <span className="text-[10px] font-semibold text-emerald-300 border border-emerald-500/40 rounded-full px-2 py-0.5">
+                ML Proprietário
+              </span>
+            )}
           </div>
-          <div className="flex items-baseline gap-1 mb-1">
-            <span className={`text-2xl font-bold ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
-              {stock.ai_analysis.buyAndHoldScore.toFixed(1)}
-            </span>
-            <span className="text-xs text-zinc-500">/ 10</span>
+          <div className="flex items-center gap-4">
+            <div>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className={`text-2xl font-bold ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
+                  {stock.ai_analysis.buyAndHoldScore.toFixed(1)}
+                </span>
+                <span className="text-xs text-zinc-500">/ 10</span>
+              </div>
+              <span className={`text-xs font-medium ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
+                {getScoreLabel(stock.ai_analysis.buyAndHoldScore)}
+              </span>
+              <p className="text-xs text-zinc-500 mt-1">Buy & Hold</p>
+            </div>
+
+            <div className="pl-4 border-l border-zinc-700/50 flex-1">
+              {predictiveScore !== null ? (
+                <div className="text-right">
+                  <p className="text-[11px] text-zinc-500">Taze Model</p>
+                  <div className="flex items-baseline justify-end gap-1 mb-1">
+                    <span className="text-2xl font-bold text-emerald-300">
+                      {predictiveScore.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-zinc-500">/ 10</span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400">
+                    {getScoreLabel(predictiveScore)}
+                  </span>
+                  <p className="text-[10px] text-zinc-500 mt-1">Horizonte {predictiveHorizon}d</p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-500">
+                  Modelo proprietário em treinamento
+                </p>
+              )}
+            </div>
           </div>
-          <span className={`text-xs font-medium ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
-            {getScoreLabel(stock.ai_analysis.buyAndHoldScore)}
-          </span>
-          <p className="text-xs text-zinc-500 mt-1">Buy & Hold</p>
         </div>
 
         {/* Swing Trade Score */}
@@ -294,4 +363,3 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
     </div>
   )
 }
-

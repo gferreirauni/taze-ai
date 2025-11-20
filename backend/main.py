@@ -4,9 +4,11 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from typing import Any, Optional, Tuple
+from pathlib import Path
 import random
 import uvicorn
 import os
+import sys
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
@@ -15,6 +17,15 @@ import httpx
 import asyncio
 
 from cache_manager import CacheManager
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+try:
+    from ml.inference import PredictiveService
+except Exception:
+    PredictiveService = None  # type: ignore
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -55,6 +66,15 @@ NEWS_CACHE_KEY = "news:latest"
 NEWS_CACHE_TTL = int(os.getenv("CACHE_NEWS_TTL", "900"))
 AI_ANALYSIS_CACHE_TTL = int(os.getenv("CACHE_AI_TTL", str(60 * 60 * 24)))
 
+if PredictiveService:
+    try:
+        predictive_service: Optional[PredictiveService] = PredictiveService()
+    except Exception as exc:
+        print(f"[PREDICTIVE] Falha ao inicializar serviço: {exc}")
+        predictive_service = None
+else:
+    predictive_service = None
+
 
 def current_iso_timestamp() -> str:
     return datetime.now().isoformat()
@@ -68,6 +88,24 @@ def cache_age_seconds(stored_at: Optional[str]) -> Optional[float]:
         return (datetime.now() - stored_dt).total_seconds()
     except ValueError:
         return None
+
+
+def enrich_with_predictive_signals(stocks_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not stocks_data or predictive_service is None:
+        return stocks_data
+
+    for stock in stocks_data:
+        if stock.get("predictiveSignals") is not None:
+            continue
+
+        symbol = stock.get("symbol", "")
+        try:
+            stock["predictiveSignals"] = predictive_service.predict_score(symbol, stock)
+        except Exception as exc:
+            print(f"[PREDICTIVE] Erro ao enriquecer {symbol}: {exc}")
+            stock["predictiveSignals"] = None
+
+    return stocks_data
 
 # ==================== DADOS REAIS COM TRADEBOX API ====================
 
@@ -344,6 +382,7 @@ async def refresh_stocks_cache() -> Tuple[list[dict[str, Any]], str, str]:
         source = "fallback"
         stocks_data = generate_mock_stock_data()
 
+    stocks_data = enrich_with_predictive_signals(stocks_data)
     stored_at = current_iso_timestamp()
     await cache.set(
         STOCKS_CACHE_KEY,
@@ -365,6 +404,7 @@ async def get_cached_stocks_data(force_refresh: bool = False) -> Tuple[list[dict
     if not force_refresh:
         cached_entry = await cache.get(STOCKS_CACHE_KEY)
         if cached_entry and isinstance(cached_entry, dict) and cached_entry.get("data"):
+            cached_entry["data"] = enrich_with_predictive_signals(cached_entry["data"])
             return (
                 cached_entry["data"],
                 cached_entry.get("stored_at"),

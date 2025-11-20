@@ -62,8 +62,8 @@ def bundle_to_feature_rows(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
     volumes = []
 
     for item in history:
-        close = float(item.get("close", 0))
-        volume = float(item.get("volume", 0))
+        close = float(item.get("close") or item.get("price_close") or 0)
+        volume = float(item.get("volume") or 0)
         closes.append(close)
         volumes.append(volume)
         date = item.get("price_date") or item.get("date")
@@ -72,9 +72,9 @@ def bundle_to_feature_rows(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
             "symbol": symbol,
             "date": date,
             "close": close,
-            "open": float(item.get("open", close)),
-            "high": float(item.get("high", close)),
-            "low": float(item.get("low", close)),
+            "open": float(item.get("open") or close),
+            "high": float(item.get("high") or close),
+            "low": float(item.get("low") or close),
             "volume": volume,
         }
 
@@ -92,6 +92,12 @@ def bundle_to_feature_rows(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     # Copiar indicadores fundamentalistas para cada linha (broadcast)
     for key, value in fundamentals_flat.items():
-        df[f"fund_{key}"] = value
+        if isinstance(value, str):
+            value = value.replace(".", "").replace(",", ".") if value.replace(".", "", 1).isdigit() else value
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            continue
+        df[f"fund_{key}"] = numeric_value
 
     return df.to_dict(orient="records")

@@ -8,7 +8,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from feature_store import FeatureStore
+from .feature_store import FeatureStore
 
 try:
     from xgboost import XGBRegressor
@@ -24,6 +24,7 @@ def engineer_targets(df: pd.DataFrame, horizon_days: int = 90) -> Tuple[pd.DataF
     df["future_price"] = df.groupby("symbol")["close"].shift(-horizon_days)
     df["target_return"] = (df["future_price"] - df["close"]) / df["close"]
     df = df.dropna(subset=["target_return"])
+    df = df.replace([np.inf, -np.inf], np.nan).dropna()
 
     feature_cols = [
         "close",
