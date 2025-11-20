@@ -9,11 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .config import settings
-
-try:  # optional plotting
-    import matplotlib.pyplot as plt  # type: ignore
-except Exception:  # pragma: no cover
-    plt = None
+import matplotlib.pyplot as plt
 
 
 BASE_DIR = Path(__file__).resolve().parent
