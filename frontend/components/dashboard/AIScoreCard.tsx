@@ -18,6 +18,8 @@ interface Stock {
     raw_prediction?: number
     horizon_days?: number
     source?: string
+    riskLevel?: string
+    riskValue?: number
   }
   ai_analysis?: {
     buyAndHoldScore: number
@@ -56,7 +58,8 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
           currentPrice: stock.currentPrice,
           dailyVariation: stock.dailyVariation,
           history: stock.history,
-          fundamentals: stock.fundamentals || {}
+          fundamentals: stock.fundamentals || {},
+          predictiveSignals: stock.predictiveSignals || null,
         }),
       })
 
@@ -100,6 +103,40 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
     if (rec === 'VENDA FORTE') return 'bg-red-500/20 text-red-400 border-red-500/30'
     return 'bg-zinc-700/20 text-zinc-400 border-zinc-700/30'
   }
+
+  const renderPredictiveBanner = () => (
+    <div className="mb-4">
+      {predictiveScore !== null ? (
+        <div className="rounded-2xl p-4 bg-gradient-to-r from-purple-900/60 via-purple-600/40 to-emerald-500/10 border border-purple-500/30 shadow-[0_10px_40px_rgba(124,58,237,0.35)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-purple-200 font-semibold">Score Taze ML</p>
+              <p className="text-[11px] text-purple-100/70 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-purple-300" />
+                Baseado em 27 anos de histórico
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold text-white">
+                {predictiveScore.toFixed(1)}
+                <span className="text-sm text-purple-100/70"> / 10</span>
+              </p>
+              <p className="text-[11px] text-purple-100/60">
+                Horizonte {predictiveHorizon} dias
+                {stock.predictiveSignals?.riskLevel && (
+                  <span className="ml-2 uppercase text-purple-200">· Risco {stock.predictiveSignals.riskLevel}</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-purple-500/30 p-4 text-[11px] text-purple-200/70">
+          Nosso modelo proprietário está treinando novas janelas de dados históricos. Assim que terminar, o Score Taze ML aparecerá aqui.
+        </div>
+      )}
+    </div>
+  )
 
   // Se não há análise, mostrar card de "Gerar Análise" - Glassmorphism
   if (!stock.ai_analysis) {
@@ -149,6 +186,8 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
             </div>
           )}
         </div>
+
+        {renderPredictiveBanner()}
 
         {/* Call to Action */}
         {generating ? (
@@ -236,19 +275,17 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
       {/* Scores Grid - 3 Colunas Modernas */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         {/* Buy & Hold Score + ML */}
-        <div className="bg-zinc-800/30 backdrop-blur-sm border border-zinc-700/50 rounded-xl p-3 hover:bg-zinc-800/50 hover:border-emerald-500/30 transition-all duration-300">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bg-zinc-800/30 backdrop-blur-sm border border-zinc-700/50 rounded-xl p-3 hover:bg-zinc-800/50 hover:border-purple-500/30 transition-all duration-300">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1">
               <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-semibold text-zinc-400">Warren</span>
+              <span className="text-xs font-semibold text-zinc-400">Warren · Buy & Hold</span>
             </div>
-            {predictiveScore !== null && (
-              <span className="text-[10px] font-semibold text-emerald-300 border border-emerald-500/40 rounded-full px-2 py-0.5">
-                ML Proprietário
-              </span>
-            )}
+            <span className="text-[10px] font-semibold text-purple-200 border border-purple-500/50 rounded-full px-2 py-0.5">
+              Taze Model
+            </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="space-y-3">
             <div>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className={`text-2xl font-bold ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
@@ -259,30 +296,30 @@ export default function AIScoreCard({ stock, onAnalysisGenerated }: AIScoreCardP
               <span className={`text-xs font-medium ${getScoreColor(stock.ai_analysis.buyAndHoldScore)}`}>
                 {getScoreLabel(stock.ai_analysis.buyAndHoldScore)}
               </span>
-              <p className="text-xs text-zinc-500 mt-1">Buy & Hold</p>
+              <p className="text-xs text-zinc-500 mt-1">Narrativa GPT · Warren</p>
             </div>
 
-            <div className="pl-4 border-l border-zinc-700/50 flex-1">
-              {predictiveScore !== null ? (
-                <div className="text-right">
-                  <p className="text-[11px] text-zinc-500">Taze Model</p>
-                  <div className="flex items-baseline justify-end gap-1 mb-1">
-                    <span className="text-2xl font-bold text-emerald-300">
-                      {predictiveScore.toFixed(1)}
-                    </span>
-                    <span className="text-xs text-zinc-500">/ 10</span>
+            {predictiveScore !== null ? (
+              <div className="rounded-lg bg-gradient-to-r from-purple-700/40 to-purple-500/20 border border-purple-500/40 p-3">
+                <p className="text-[11px] uppercase text-purple-100 font-semibold">Score Taze ML</p>
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <p className="text-2xl font-bold text-white">{predictiveScore.toFixed(1)}</p>
+                    <p className="text-[11px] text-purple-100/70">Baseado em 27 anos de histórico</p>
                   </div>
-                  <span className="text-[11px] text-zinc-400">
-                    {getScoreLabel(predictiveScore)}
-                  </span>
-                  <p className="text-[10px] text-zinc-500 mt-1">Horizonte {predictiveHorizon}d</p>
+                  <div className="text-right text-[11px] text-purple-100/70">
+                    <p>Horizonte {predictiveHorizon} dias</p>
+                    {stock.predictiveSignals?.riskLevel && (
+                      <p>Risco {stock.predictiveSignals.riskLevel}</p>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <p className="text-[11px] text-zinc-500">
-                  Modelo proprietário em treinamento
-                </p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-purple-500/30 p-3 text-[11px] text-purple-200/70">
+                Score proprietário em processamento. Volte em instantes.
+              </div>
+            )}
           </div>
         </div>
 

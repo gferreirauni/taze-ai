@@ -222,6 +222,11 @@ async def get_aggregated_stock_data(symbol: str, auth: tuple) -> dict:
                 "history": history,
                 "fundamentals": fundamentals
             }
+
+            if predictive_service:
+                result["predictiveSignals"] = predictive_service.predict_score(symbol, result)
+            else:
+                result["predictiveSignals"] = None
             
             print(f"[TRADEBOX] ✅ Dados finais: {symbol} - R$ {result['currentPrice']:.2f} ({result['dailyVariation']:+.2f}%) | Fundamentals: {len(fundamentals)} indicadores")
             return result
@@ -825,9 +830,17 @@ class AIAnalysisRequest(BaseModel):
     currentPrice: float
     dailyVariation: float
     history: list
-    fundamentals: dict = None
+    fundamentals: Optional[dict] = None
+    predictiveSignals: Optional[dict] = None
 
-async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: str, fundamentals: dict, history: list) -> dict:
+async def generate_real_ai_analysis(
+    symbol: str,
+    currentPrice: float,
+    sector: str,
+    fundamentals: dict,
+    history: list,
+    predictive_signals: Optional[dict] = None,
+) -> dict:
     """
     Gera análise de IA REAL usando OpenAI GPT-4o
     
@@ -839,11 +852,23 @@ async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: st
     Retorna JSON estruturado com scores e recomendações
     """
     import json
+
+    predictive_score = predictive_signals.get("score") if predictive_signals else None
+    risk_level = predictive_signals.get("riskLevel") if predictive_signals else None
+    risk_display = risk_level if risk_level else "N/D"
+    score_display = f"{predictive_score:.1f}" if predictive_score is not None else "N/D"
+
+    predictive_section = f"""
+[DADOS INTERNOS TAZE AI]
+Score Proprietário de Buy & Hold (ML): {score_display}/10.
+Risco Calculado: {risk_display}.
+INSTRUÇÃO: Você deve considerar nosso Score Proprietário na sua análise 'Warren'. Se o score for alto (>7), seja otimista citando "nossos modelos matemáticos". Se for baixo (<4), seja pessimista e mencione que "nossos modelos matemáticos" detectam risco elevado.
+"""
     
     # System Prompt Mestre (TRÊS analistas)
-    system_prompt = """Você é um comitê de TRÊS analistas financeiros de elite:
+    system_prompt = f"""Você é um comitê de TRÊS analistas financeiros de elite:
 
-1. **Analista Fundamentalista (Warren):** Focado em 'Buy & Hold' (longo prazo, anos). 
+1. **Analista Fundamentalista (Warren):** Focado em 'Buy & Hold' (longo prazo, anos).
    Você ignora volatilidade diária. Sua análise foca EXCLUSIVAMENTE em fundamentalismo (P/L, P/VP, ROE, Dividend Yield e Dívida).
    
    **CAMPOS DISPONÍVEIS NOS DADOS:**
@@ -856,13 +881,15 @@ async def generate_real_ai_analysis(symbol: str, currentPrice: float, sector: st
    - indicators_div_br_patrim (Dívida Bruta/Patrimônio)
    - indicators_cresc_rec (Crescimento de Receita %)
 
-2. **Analista Técnico (Trader):** Focado em 'Swing Trade' (médio prazo, semanas/meses). 
+2. **Analista Técnico (Trader):** Focado em 'Swing Trade' (médio prazo, semanas/meses).
    Você usa o histórico de 90 dias para identificar tendências, médias móveis, suporte e resistência.
 
-3. **Analista de Volatilidade (Viper):** Focado em 'Day Trade' (curto prazo, 1-2 dias). 
+3. **Analista de Volatilidade (Viper):** Focado em 'Day Trade' (curto prazo, 1-2 dias).
    Você analisa a volatilidade, oscillations_day e os min_52_weeks/max_52_weeks para oportunidades rápidas.
 
-**REGRA CRÍTICA DE LÓGICA:** Sua análise técnica (suporte/resistência) DEVE ser 100% coerente com o currentPrice (preço atual) fornecido. 
+{predictive_section}
+
+**REGRA CRÍTICA DE LÓGICA:** Sua análise técnica (suporte/resistência) DEVE ser 100% coerente com o currentPrice (preço atual) fornecido.
 Nunca diga que uma resistência (teto) é MENOR que o preço atual. Use o currentPrice como sua âncora para definir suportes (abaixo) e resistências (acima).
 
 **Sua tarefa:** Analisar os dados fornecidos e retornar um JSON ESTRITO:
@@ -888,7 +915,6 @@ Nunca diga que uma resistência (teto) é MENOR que o preço atual. Use o curren
 COMPRA FORTE | COMPRA | MANTER | VENDA
 
 RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
-
     # User Prompt (dados da ação)
     user_prompt = f"""Analise esta ação da B3:
 
@@ -1006,6 +1032,15 @@ async def analyze_stock(request: AIAnalysisRequest):
     # Log simplificado
     fund_count = len(request.fundamentals) if request.fundamentals else 0
     print(f"\n[AI] Gerando análise TRIPLA para {request.symbol} (Fundamentals: {fund_count} indicadores)")
+
+    predictive_signals = request.predictiveSignals
+    if not predictive_signals and predictive_service:
+        snapshot = {
+            "symbol": request.symbol,
+            "history": request.history,
+            "fundamentals": request.fundamentals or {},
+        }
+        predictive_signals = predictive_service.predict_score(request.symbol, snapshot)
     
     # Gerar análise REAL (não mock!)
     analysis = await generate_real_ai_analysis(
@@ -1013,7 +1048,8 @@ async def analyze_stock(request: AIAnalysisRequest):
         currentPrice=request.currentPrice,
         sector=request.fundamentals.get("sector", "N/A") if request.fundamentals else "N/A",
         fundamentals=request.fundamentals or {},
-        history=request.history
+        history=request.history,
+        predictive_signals=predictive_signals
     )
     
     # Salvar em cache (por dia) - ESSENCIAL para economizar tokens!

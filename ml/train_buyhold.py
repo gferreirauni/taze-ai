@@ -34,6 +34,8 @@ def engineer_targets(df: pd.DataFrame, horizon_days: int = 90) -> Tuple[pd.DataF
         "daily_return",
         "volume",
         "volume_ma_20",
+        "volatility_30",
+        "rsi_14",
     ]
     feature_cols += [col for col in df.columns if col.startswith("fund_")]
 

@@ -9,6 +9,42 @@ import pandas as pd
 
 from .config import settings
 
+FUNDAMENTAL_FIELDS = {
+    "indicators_pl": "fund_pl",
+    "indicators_div_yield": "fund_dividend_yield",
+    "indicators_roe": "fund_roe",
+    "indicators_pvp": "fund_pvp",
+    "indicators_net_margin": "fund_net_margin",
+}
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace("%", "").replace("R$", "").strip()
+        cleaned = cleaned.replace(",", ".")
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(window=period, min_periods=period).mean()
+    avg_loss = loss.rolling(window=period, min_periods=period).mean()
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(50)
+
 
 class FeatureStore:
     """
@@ -89,15 +125,12 @@ def bundle_to_feature_rows(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
     df["close_std_20"] = df["close"].rolling(window=20, min_periods=1).std().fillna(0)
     df["daily_return"] = df["close"].pct_change().fillna(0)
     df["volume_ma_20"] = df["volume"].rolling(window=20, min_periods=1).mean()
+    df["volatility_30"] = df["daily_return"].rolling(window=30, min_periods=1).std().fillna(0)
+    df["rsi_14"] = calculate_rsi(df["close"])
 
-    # Copiar indicadores fundamentalistas para cada linha (broadcast)
-    for key, value in fundamentals_flat.items():
-        if isinstance(value, str):
-            value = value.replace(".", "").replace(",", ".") if value.replace(".", "", 1).isdigit() else value
-        try:
-            numeric_value = float(value)
-        except (TypeError, ValueError):
-            continue
-        df[f"fund_{key}"] = numeric_value
+    for source_key, target_key in FUNDAMENTAL_FIELDS.items():
+        numeric_value = _safe_float(fundamentals_flat.get(source_key))
+        if numeric_value is not None:
+            df[target_key] = numeric_value
 
     return df.to_dict(orient="records")

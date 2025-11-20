@@ -1,315 +1,225 @@
-# 🚀 Taze AI - Plataforma Inteligente de Análise de Investimentos
+# Taze AI – Plataforma Inteligente de Investimentos para B3
 
-![Version](https://img.shields.io/badge/version-2.3.2-emerald)
+![Version](https://img.shields.io/badge/version-2.4.0-emerald)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![Next.js](https://img.shields.io/badge/next.js-15-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Plataforma de análise de investimentos da B3 com inteligência artificial real**, utilizando OpenAI GPT-4o para gerar análises técnicas e fundamentalistas personalizadas.
+Taze AI é um painel SaaS de inteligência para investidores brasileiros que combina dados profissionais da Tradebox, modelos proprietários e o GPT‑4o para entregar decisões prontas (COMPRA/MANTER/VENDA) em segundos.
 
 ---
 
-## ✨ Principais Funcionalidades
+## Visão Geral
 
-### 🤖 **Análise de IA com 3 Perfis de Investidores**
-- **🏛️ Warren (Buy & Hold)**: Análise fundamentalista para longo prazo
-- **📈 Trader (Swing Trade)**: Análise técnica para médio prazo
-- **⚡ Viper (Day Trade)**: Análise de volatilidade para curto prazo
-
-### 📊 **Painel de Decisão Inteligente**
-- Carrossel automático de análises (troca a cada 15s)
-- Scores de 0-10 para cada perfil de investidor
-- Recomendações claras: COMPRA FORTE | COMPRA | MANTER | VENDA
-
-### 💬 **Chat Assistant com Function Calling**
-- IA busca dados em tempo real quando necessário
-- Respostas contextualizadas sobre ações da B3
-- Detecção automática de ações mencionadas
-
-### 📰 **Feed de Notícias Automático**
-- Carrossel vertical de notícias (troca a cada 10s)
-- Web scraping de fontes confiáveis
-- Integração com botão de leitura completa
-
-### 📈 **Dados em Tempo Real**
-- Integração com Tradebox API (dados profissionais)
-- Histórico de 90 dias para análise técnica
-- Fundamentalistas completos (P/L, ROE, DY, etc)
+| Pilar | Descrição |
+|-------|-----------|
+| **Painel de Decisão** | Carrosséis com análise Warren/Trader/Viper, geração inline e indicadores visuais (0‑10). |
+| **Chat Assistant** | GPT‑4o com Function Calling para responder perguntas sobre PETR4, VALE3 etc. |
+| **Vidente (ML Proprietário)** | Pipeline em `ml/` que treina XGBoost com 27 anos de fundamentos + técnicos, gera o **Score Taze ML** e alimenta o frontend. |
+| **Backtesting & Alpha** | Script `ml/backtest.py` simula a carteira Taze versus Buy & Hold e produz gráficos/relatórios. |
+| **Observabilidade e Cache** | Cache multi‑camada (Redis opcional) para ações, análises e notícias; requisições paralelas com asyncio. |
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## Funcionalidades Principais
 
-### Backend
-- **FastAPI** - Framework Python assíncrono de alta performance
-- **OpenAI GPT-4o** - IA generativa para análises profissionais
-- **Tradebox API** - Dados profissionais da B3
-- **httpx** - Cliente HTTP assíncrono
-- **Pydantic** - Validação de dados
+### 1. Painel de IA com 3 Perfis
+- **Warren (Buy & Hold)** – análise fundamentalista + Score Taze ML (badge “Baseado em 27 anos de histórico”).
+- **Trader (Swing Trade)** – análise técnica (médias, suportes, tendência).
+- **Viper (Day Trade)** – leitura de volatilidade, oscillations_day e range diário.
+- Recomendações claras: `COMPRA FORTE`, `COMPRA`, `MANTER`, `VENDA`.
 
-### Frontend
-- **Next.js 15** - React framework com App Router
-- **TypeScript** - Tipagem estática
-- **Tailwind CSS** - Estilização moderna
-- **Embla Carousel** - Carrosséis suaves e responsivos
-- **Lucide Icons** - Ícones modernos
+### 2. Chat Inteligente
+- Prompt especializado em B3, responde em PT‑BR.
+- Function Calling: quando o usuário cita “VALE3”, a IA busca dados atualizados antes de responder.
+- Encadeamento com o Painel (mesma fonte de dados e Score ML disponíveis via contexto).
 
-### Integrações
-- **OpenAI Function Calling** - IA que busca dados automaticamente
-- **Web Scraping** - Notícias em tempo real
-- **Cache Inteligente** - 24h para análises (economia de tokens)
+### 3. Feed de Notícias
+- Scraping do portal Análise de Ações com fallback seguro.
+- Carrossel vertical autônomo, atualização a cada 15 minutos.
+
+### 4. Inteligência Proprietária (“O Vidente”)
+- `ml/ingest.py`: baixa histórico completo, calcula features (RSI, volatilidade, médias, fundamentos).
+- `ml/train_buyhold.py`: treina XGBoost (score Buy & Hold), salva `ml/models/buyhold_xgb.pkl`.
+- `ml/inference.py`: serviço carregado pelo backend que gera `predictiveSignals` (score 0‑10, risco BAIXO/MODERADO/ALTO).
+- Backend injeta `predictiveSignals` após cada chamada à Tradebox e repassa ao GPT e ao frontend.
+
+### 5. Backtesting de Valor
+- `ml/backtest.py`: simula 2 carteiras (Taze AI vs Buy & Hold) nos últimos 24 meses usando os dados `silver/`.
+- Critérios: abre posição se Score > 7, zera se Score < 4, começa com R$ 10.000.
+- Output inclui resultados por ativo + Alpha (%) e, se Matplotlib estiver instalado, gráficos em `ml/results/`.
 
 ---
 
-## 🚀 Como Executar
+## Arquitetura
 
-### Pré-requisitos
-- **Python 3.13+**
-- **Node.js 18+**
-- **API Keys**: OpenAI, Tradebox
+```
+frontend/ (Next.js 15, React 19, Tailwind)
+│
+├── app/ (App Router, páginas e API routes)
+├── components/dashboard/AIScoreCard.tsx  ← destaque para Score Taze ML
+└── ... 
 
-### 1. Clone o Repositório
+backend/ (FastAPI + GPT-4o + Tradebox)
+│
+├── main.py
+│   ├── /api/stocks            ← agrega info intraday + fundamentals + predictiveSignals
+│   ├── /api/ai/analyze        ← GPT-4o + Score Taze no prompt
+│   ├── /api/ai/chat           ← assistente com Function Calling
+│   └── /api/news              ← scraping com cache
+└── cache_manager.py           ← Redis opcional + fallback em memória
+
+ml/
+├── config.py / tradebox_client.py / feature_store.py
+├── ingest.py                  ← pipeline bronze → silver
+├── train_buyhold.py           ← treino XGBoost (Score Warren)
+├── inference.py               ← PredictiveService usado pelo backend
+├── backtest.py                ← carteiras Taze x Buy & Hold
+└── data/bronze|silver|gold    ← datasets persistidos
+```
+
+---
+
+## Tecnologias
+
+| Camada | Tecnologias |
+|--------|-------------|
+| Backend | FastAPI · httpx · Pydantic · OpenAI GPT‑4o · Redis opcional |
+| Frontend | Next.js 15 (App Router) · React 19 · TypeScript · Tailwind · Embla Carousel · Lucide Icons |
+| ML / Pipelines | Python 3.13 · pandas · numpy · xgboost · pyarrow · scikit-learn · matplotlib (opcional) |
+| Dados | Tradebox API (intraday, histories, fundamentals) · Brapi (backup) |
+
+---
+
+## Setup e Execução
+
+### 1. Clonar e configurar
 ```bash
 git clone https://github.com/seu-usuario/tazeai.git
 cd tazeai
 ```
 
-### 2. Configure as Variáveis de Ambiente
-
-Crie um arquivo `.env` na pasta `backend/`:
-
-```env
-# OpenAI
-OPENAI_API_KEY=sk-proj-...
-
-# Tradebox API
-TRADEBOX_API_USER=TradeBox
-TRADEBOX_API_PASS=TradeBoxAI@2025
-
-# Brapi (Backup)
-BRAPI_TOKEN=seu_token_aqui
-```
-
-### 3. Inicie o Backend
-
+### 2. Backend
 ```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
+
+cp .env.example .env  # ou crie manualmente
 python main.py
 ```
 
-Backend rodará em: **http://localhost:8000**
+`.env` esperado (exemplo):
+```
+OPENAI_API_KEY=sk-proj-xxxx
+TRADEBOX_API_USER=TradeBox
+TRADEBOX_API_PASS=TradeBoxAI@2025
+BRAPI_TOKEN=seu_token
+REDIS_URL=redis://localhost:6379/0  # opcional
+```
 
-### 4. Inicie o Frontend
-
+### 3. Frontend
 ```bash
-cd frontend
+cd ../frontend
 npm install
 npm run dev
 ```
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
 
-Frontend rodará em: **http://localhost:3000**
+### 4. Pipeline do Vidente
+```bash
+cd ../
+pip install -r ml/requirements.txt
 
----
+# Ingestão (27 anos ≈ 10.000 dias; ticker a ticker com ML_CONCURRENCY=1)
+ML_CONCURRENCY=1 python -m ml.ingest --range-days 10000
 
-## 📁 Estrutura do Projeto
-
+# Treino do modelo
+python -m ml.train_buyhold
 ```
-tazeai/
-├── backend/
-│   ├── main.py                 # API FastAPI com endpoints
-│   ├── requirements.txt        # Dependências Python
-│   └── venv/                   # Ambiente virtual
-│
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx            # Homepage (Painel de Decisão)
-│   │   ├── analises/
-│   │   │   └── page.tsx        # Página de análises detalhadas
-│   │   ├── layout.tsx          # Layout global
-│   │   └── globals.css         # Estilos globais
-│   │
-│   ├── components/
-│   │   ├── dashboard/
-│   │   │   ├── AIScoreCard.tsx # Card de análise com 3 scores
-│   │   │   ├── AIInsights.tsx  # Análise detalhada completa
-│   │   │   ├── ChatWidget.tsx  # Chat com IA
-│   │   │   ├── Sidebar.tsx     # Sidebar colapsável
-│   │   │   └── StockChart.tsx  # Gráfico de preços
-│   │   │
-│   │   └── ui/
-│   │       ├── carousel.tsx    # Componente de carrossel
-│   │       └── button.tsx      # Componente de botão
-│   │
-│   ├── lib/
-│   │   └── utils.ts            # Funções utilitárias
-│   │
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── docs/
-│   └── sessoes-antigas/        # Documentação de desenvolvimento
-│
-├── README.md
-└── LICENSE
+O arquivo `ml/models/buyhold_xgb.pkl` será criado/atualizado e o backend já utilizará o novo score.
+
+### 5. Backtesting (opcional)
+```bash
+python ml/backtest.py
 ```
-
----
-
-## 🎯 Endpoints da API
-
-### Dados de Ações
-- `GET /api/stocks` - Lista todas as ações monitoradas
-- `GET /api/stocks/{symbol}` - Detalhes de uma ação específica
-
-### Análises de IA
-- `POST /api/ai/analyze` - Gera análise com 3 perfis
-- `GET /api/ai/analysis/{symbol}` - Busca análise em cache
-
-### Chat Assistant
-- `POST /api/ai/chat` - Conversa com IA (function calling)
-
-### Notícias
-- `GET /api/news` - Feed de notícias (scraping)
-
-### Sistema
-- `GET /` - Status da API
-- `GET /health` - Health check
-
----
-
-## 🎨 Funcionalidades Principais
-
-### 1. Análise Tripla de IA
-Cada ação recebe 3 análises diferentes:
-
-| Perfil | Foco | Prazo | Analisa |
-|--------|------|-------|---------|
-| 🏛️ **Warren** | Fundamentalista | Anos | P/L, ROE, DY, Dívida |
-| 📈 **Trader** | Técnico | Semanas/Meses | Tendências, Suporte/Resistência |
-| ⚡ **Viper** | Volatilidade | 1-2 dias | Oscilações, Amplitude |
-
-### 2. Painel de Decisão
-- **Carrossel automático** de ações (15s)
-- **Geração inline** de análises (sem redirect)
-- **Indicadores visuais** (dots verdes)
-- **Stats cards** com métricas em tempo real
-
-### 3. Chat Inteligente
-- **Function Calling**: IA busca dados automaticamente
-- **Sem contexto visível**: Experiência fluida
-- **Detecção automática**: Reconhece ações mencionadas
-- **Paleta verde**: Design consistente
-
-### 4. Feed de Notícias
-- **Carrossel vertical** automático (10s)
-- **Web scraping** de fontes confiáveis
-- **Badge flutuante** "Ao vivo"
-- **Botão direto** para notícia completa
-
----
-
-## 🎨 Design System
-
-### Paleta de Cores
-```css
-/* Verde Principal (Emerald) */
-emerald-500: #10b981
-emerald-600: #059669
-
-/* Backgrounds */
-zinc-950: #09090b (background principal)
-zinc-900: #18181b (cards)
-zinc-800: #27272a (elementos)
-
-/* Scores */
-Excelente (8-10): emerald-400
-Bom (6-7): blue-400
-Razoável (4-5): orange-400
-Fraco (0-3): red-400
+Saída esperada:
 ```
-
-### Componentes Modernos
-- **Glassmorphism**: `backdrop-blur-xl` com transparências
-- **Gradientes**: Transições suaves verde
-- **Shadows**: `shadow-emerald-500/20`
-- **Animações**: `transition-all duration-300`
-
----
-
-## 📊 Cache e Performance
-
-### Otimizações Implementadas
-- ✅ **Cache de Ações**: 5 minutos (evita sobrecarga de API)
-- ✅ **Cache de Análises**: 24 horas (economia de tokens OpenAI)
-- ✅ **Cache de Notícias**: 15 minutos
-- ✅ **Histórico Limitado**: Apenas 90 dias (otimização de rede)
-- ✅ **Requisições Paralelas**: AsyncIO para APIs
-
-### Economia de Custos
-- **Análises**: ~$0.02/análise (GPT-4o)
-- **Cache 24h**: Reduz 95% dos custos
-- **5 ações x 365 dias**: ~$36/ano (sem cache: ~$720/ano)
+[PETR4] Resultado Taze AI: R$ 14.500 (+45.00%)
+[PETR4] Resultado Buy&Hold: R$ 12.000 (+20.00%)
+[PETR4] Alpha (Diferença): +25.00% 🏆
+...
+[BACKTEST] Alpha médio na carteira monitorada: +18.42%
+```
+Se `matplotlib` estiver instalado, gráficos serão salvos em `ml/results/`.
 
 ---
 
-## 🔒 Segurança
-
-- ✅ Variáveis de ambiente (.env)
-- ✅ CORS configurado
-- ✅ Validação de dados (Pydantic)
-- ✅ Rate limiting (cache)
-- ✅ Error handling completo
-
----
-
-## 🚧 Roadmap
-
-### Em Desenvolvimento
-- [ ] Autenticação de usuários
-- [ ] Carteira personalizada
-- [ ] Alertas de preço
-- [ ] Exportação de relatórios (PDF)
-
-### Futuro
-- [ ] Mais ações da B3 (top 20)
-- [ ] Análise de FIIs
-- [ ] Backtesting de estratégias
-- [ ] App mobile (React Native)
+## Como o Score Taze ML é usado
+1. `ml/ingest.py` gera datasets **silver** com features técnicas + 50 indicadores fundamentalistas (ex.: P/L, DY, ROE, Margem Líquida).
+2. `ml/train_buyhold.py` treina o XGBoost e armazena metadata (features, RMSE, horizonte).
+3. `backend/main.py` instância `PredictiveService`, que:
+   - Calcula RSI/volatilidade com os dados em cache.
+   - Prediz retorno, converte para score 0‑10, aplica penalização por risco.
+   - Injeta `predictiveSignals` em `/api/stocks`.
+4. O endpoint `/api/ai/analyze` inclui esses sinais no prompt do GPT-4o (bloco `[DADOS INTERNOS TAZE AI]`) e o frontend exibe o card “Score Taze ML”.
 
 ---
 
-## 📝 Licença
+## Endpoints Principais
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
----
-
-## 👨‍💻 Autor
-
-**Gustavo F.**  
-Desenvolvedor Full Stack | Entusiasta de IA
-
----
-
-## 🤝 Contribuições
-
-Contribuições são bem-vindas! Por favor:
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/NovaFuncionalidade`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/NovaFuncionalidade`)
-5. Abra um Pull Request
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET`  | `/api/stocks` | Lista as ações monitoradas (dados Tradebox + `predictiveSignals`). |
+| `GET`  | `/api/stocks/{symbol}` | Detalhes pontuais (backup Brapi). |
+| `POST` | `/api/ai/analyze` | Aciona o GPT‑4o para gerar a análise Warren/Trader/Viper. |
+| `GET`  | `/api/ai/analysis/{symbol}` | Retorna a análise em cache (24h). |
+| `POST` | `/api/ai/chat` | Chat financeiro com Function Calling. |
+| `GET`  | `/api/news` | Feed de notícias via scraping com fallback. |
 
 ---
 
-## 📧 Suporte
+## Cache & Performance
 
-Para dúvidas ou sugestões, abra uma issue no GitHub.
+- **CacheManager**: Redis (se disponível) ou memória local com TTL configurável (ações 5 min, análises 24h, notícias 15 min).
+- **AsyncIO + httpx**: requisições simultâneas para `assetInformation`, `assetIntraday`, `assetHistories`, `assetFundamentals`.
+- **Histórico otimizado**: Tradebox com `?range=3mo` e fallback `slice(-90)` se necessário.
+- **Backpressure**: ao enriquecer com `predictiveSignals`, o cache é sempre atualizado e reduz chamadas redundantes ao modelo.
 
 ---
 
-**Desenvolvido com ❤️ usando IA Real**
+## Próximos Passos
+
+- Autenticação + carteira personalizada por usuário.
+- Alertas proativos via e‑mail/push (com base no Score Taze + variação intraday).
+- Integração com corretoras e importação de notas.
+- Expansão para FIIs e top 20 da B3.
+- App mobile (React Native) espelhando o Painel de Decisão.
+
+---
+
+## Contribuições
+
+1. Faça fork.
+2. Crie uma branch: `git checkout -b feature/minha-feature`.
+3. Commit: `git commit -m "feat: adiciona XYZ"`.
+4. Push: `git push origin feature/minha-feature`.
+5. Abra um Pull Request.
+
+---
+
+## Licença
+
+Projeto licenciado sob MIT. Leia [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+## Suporte
+
+- Abra uma issue neste repositório para dúvidas ou bugs.
+- Ideias de melhoria? Vamos conversar no PR!
+
+**Taze AI** – “Nossos modelos matemáticos indicam o próximo movimento.” 🔮📈
