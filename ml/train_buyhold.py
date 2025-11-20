@@ -28,14 +28,20 @@ def engineer_targets(df: pd.DataFrame, horizon_days: int = 90) -> Tuple[pd.DataF
 
     feature_cols = [
         "close",
-        "close_ma_5",
-        "close_ma_20",
-        "close_std_20",
-        "daily_return",
         "volume",
-        "volume_ma_20",
-        "volatility_30",
+        "close_ma_9",
+        "close_ma_21",
+        "close_ma_50",
+        "daily_return",
+        "volatility_21",
         "rsi_14",
+        "macd_line",
+        "macd_signal",
+        "macd_hist",
+        "bb_upper",
+        "bb_lower",
+        "bb_pband",
+        "momentum_10",
     ]
     feature_cols += [col for col in df.columns if col.startswith("fund_")]
 
@@ -85,6 +91,12 @@ if __name__ == "__main__":
     print(f"[TRAIN] Dataset final: {X.shape[0]} linhas x {X.shape[1]} features")
 
     model = train_model(X, y)
+
+    importances = model.feature_importances_
+    feature_ranking = sorted(zip(X.columns, importances), key=lambda x: x[1], reverse=True)[:10]
+    print("[RAIO-X] Importância das Features:")
+    for idx, (name, score) in enumerate(feature_ranking, start=1):
+        print(f"{idx}. {name}: {score:.4f}")
     preds = model.predict(X)
     rmse = float(np.sqrt(np.mean((preds - y) ** 2)))
     print(f"[TRAIN] RMSE (in-sample): {rmse:.5f}")
