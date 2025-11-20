@@ -38,7 +38,10 @@ pip install -r requirements.txt
 echo "OPENAI_API_KEY=sk-proj-..." > .env
 echo "TRADEBOX_API_USER=TradeBox" >> .env
 echo "TRADEBOX_API_PASS=TradeBoxAI@2025" >> .env
+echo "REDIS_URL=redis://localhost:6379/0" >> .env  # Opcional: cache compartilhado
 ```
+
+> Observacao: se voce nao tiver Redis rodando localmente, o backend usa automaticamente o cache em memoria.
 
 ### **3. Configure o Frontend**
 

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from typing import Any, Optional, Tuple
 import random
 import uvicorn
 import os
@@ -12,6 +13,8 @@ from bs4 import BeautifulSoup
 import re
 import httpx
 import asyncio
+
+from cache_manager import CacheManager
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -44,36 +47,27 @@ app.add_middleware(
 )
 
 # ==================== CACHE GLOBAL ====================
-# Cache em memória para evitar requisições excessivas ao yfinance
-stocks_cache = {
-    "data": None,
-    "timestamp": None,
-    "ttl": 300  # 5 minutos em segundos
-}
+cache = CacheManager()
 
-# Cache de análises de IA (por dia para economizar tokens)
-# Estrutura: { "PETR4_2025-11-14": { "analysis": {...}, "timestamp": datetime } }
-ai_analysis_cache = {}
+STOCKS_CACHE_KEY = "stocks:aggregated"
+STOCKS_CACHE_TTL = int(os.getenv("CACHE_STOCKS_TTL", "300"))
+NEWS_CACHE_KEY = "news:latest"
+NEWS_CACHE_TTL = int(os.getenv("CACHE_NEWS_TTL", "900"))
+AI_ANALYSIS_CACHE_TTL = int(os.getenv("CACHE_AI_TTL", str(60 * 60 * 24)))
 
-# Cache de notícias (15 minutos)
-news_cache = {
-    "data": None,
-    "timestamp": None,
-    "ttl": 900  # 15 minutos
-}
 
-def is_cache_valid():
-    """Verifica se o cache ainda é válido"""
-    if stocks_cache["data"] is None or stocks_cache["timestamp"] is None:
-        return False
-    
-    elapsed = (datetime.now() - stocks_cache["timestamp"]).total_seconds()
-    return elapsed < stocks_cache["ttl"]
+def current_iso_timestamp() -> str:
+    return datetime.now().isoformat()
 
-def update_cache(data):
-    """Atualiza o cache com novos dados"""
-    stocks_cache["data"] = data
-    stocks_cache["timestamp"] = datetime.now()
+
+def cache_age_seconds(stored_at: Optional[str]) -> Optional[float]:
+    if not stored_at:
+        return None
+    try:
+        stored_dt = datetime.fromisoformat(stored_at)
+        return (datetime.now() - stored_dt).total_seconds()
+    except ValueError:
+        return None
 
 # ==================== DADOS REAIS COM TRADEBOX API ====================
 
@@ -322,6 +316,66 @@ def fetch_real_stock_data():
     print("[FALLBACK] Nenhuma acao encontrada na Brapi, usando dados mockados")
     return generate_mock_stock_data()
 
+async def refresh_stocks_cache() -> Tuple[list[dict[str, Any]], str, str]:
+    """
+    Recarrega dados da Tradebox e persiste no cache distribuido.
+    Retorna (dados, timestamp_iso, fonte).
+    """
+    auth = (TRADEBOX_API_USER, TRADEBOX_API_PASS)
+    source = "tradebox_api"
+
+    try:
+        tasks = [get_aggregated_stock_data(symbol, auth) for symbol in B3_STOCKS]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        stocks_data = [
+            result for result in results
+            if isinstance(result, dict)
+        ]
+
+        if len(stocks_data) == 0:
+            print("[TRADEBOX] Nenhuma acao valida recebida, usando fallback mockado.")
+            source = "fallback"
+            stocks_data = generate_mock_stock_data()
+        else:
+            print(f"[TRADEBOX] OK {len(stocks_data)} acoes carregadas com sucesso")
+    except Exception as exc:
+        print(f"[TRADEBOX ERROR] {exc}")
+        source = "fallback"
+        stocks_data = generate_mock_stock_data()
+
+    stored_at = current_iso_timestamp()
+    await cache.set(
+        STOCKS_CACHE_KEY,
+        {
+            "data": stocks_data,
+            "stored_at": stored_at,
+            "source": source,
+        },
+        STOCKS_CACHE_TTL,
+    )
+    return stocks_data, stored_at, source
+
+
+async def get_cached_stocks_data(force_refresh: bool = False) -> Tuple[list[dict[str, Any]], Optional[str], bool, str]:
+    """
+    Recupera dados do cache compartilhado ou atualiza se necessario.
+    Retorna (dados, timestamp_iso, veio_do_cache, fonte_original)
+    """
+    if not force_refresh:
+        cached_entry = await cache.get(STOCKS_CACHE_KEY)
+        if cached_entry and isinstance(cached_entry, dict) and cached_entry.get("data"):
+            return (
+                cached_entry["data"],
+                cached_entry.get("stored_at"),
+                True,
+                cached_entry.get("source", "tradebox_api")
+            )
+
+    data, stored_at, source = await refresh_stocks_cache()
+    return data, stored_at, False, source
+
+
 @app.get("/")
 async def root():
     """Endpoint de boas-vindas"""
@@ -335,12 +389,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Endpoint de health check"""
-    cache_status = "valid" if is_cache_valid() else "expired"
+    cache_entry = await cache.get(STOCKS_CACHE_KEY)
+    cache_status = "warm" if cache_entry else "cold"
+    cache_age = cache_age_seconds(cache_entry.get("stored_at")) if cache_entry else None
     return {
         "status": "healthy",
         "service": "Taze AI Backend",
         "cache_status": cache_status,
-        "data_source": "brapi",
+        "cache_age_seconds": cache_age,
+        "data_source": "tradebox",
         "brapi_configured": bool(BRAPI_TOKEN)
     }
 
@@ -352,15 +409,17 @@ async def get_news():
     Fonte: https://www.analisedeacoes.com/noticias/
     """
     # Verificar cache
-    if news_cache["data"] is not None and news_cache["timestamp"] is not None:
-        elapsed = (datetime.now() - news_cache["timestamp"]).total_seconds()
-        if elapsed < news_cache["ttl"]:
-            print("[NEWS CACHE] Retornando notícias do cache")
-            return {
-                "news": news_cache["data"],
-                "cached": True,
-                "cache_age_seconds": elapsed
-            }
+    cached_news = await cache.get(NEWS_CACHE_KEY)
+    if cached_news and cached_news.get("data"):
+        age = cache_age_seconds(cached_news.get("stored_at"))
+        print("[NEWS CACHE] Retornando noticias do cache compartilhado")
+        return {
+            "news": cached_news["data"],
+            "cached": True,
+            "cache_age_seconds": age,
+            "source": cached_news.get("source", "Analise de Acoes (cache)")
+        }
+    
     
     # Buscar notícias via scraping
     print("[NEWS] Fazendo scraping de notícias do Análise de Ações...")
@@ -513,9 +572,16 @@ async def get_news():
                 }
             ]
         
-        # Atualizar cache
-        news_cache["data"] = news_items
-        news_cache["timestamp"] = datetime.now()
+        # Atualizar cache distribu��do
+        await cache.set(
+            NEWS_CACHE_KEY,
+            {
+                "data": news_items,
+                "stored_at": current_iso_timestamp(),
+                "source": "Anǭlise de A����es (Web Scraping)"
+            },
+            NEWS_CACHE_TTL
+        )
         
         print(f"[NEWS] ✅ {len(news_items)} notícias carregadas do Análise de Ações")
         
@@ -523,7 +589,7 @@ async def get_news():
             "news": news_items,
             "cached": False,
             "count": len(news_items),
-            "source": "Análise de Ações (Web Scraping)"
+            "source": "Analise de Acoes (Web Scraping)"
         }
         
     except Exception as e:
@@ -566,73 +632,25 @@ async def get_news():
 @app.get("/api/stocks")
 async def get_stocks():
     """
-    Retorna lista de ações com dados REAIS da B3 via Tradebox API
-    Implementa cache de 5 minutos para otimizar performance
+    Retorna lista de acoes com dados REAIS da B3 via Tradebox API
+    Implementa cache distribuido para otimizar performance
     """
-    # Verificar se o cache é válido
-    if is_cache_valid():
-        print("[CACHE] Retornando dados do cache")
-        return {
-            "stocks": stocks_cache["data"],
-            "timestamp": datetime.now().isoformat(),
-            "count": len(stocks_cache["data"]),
-            "source": "cache",
-            "cache_age_seconds": (datetime.now() - stocks_cache["timestamp"]).total_seconds()
-        }
-    
-    # Cache expirado, buscar novos dados
-    print("[ATUALIZANDO] Cache expirado, buscando dados da Tradebox API...")
-    
-    # Buscar dados de todas as ações em paralelo
-    auth = (TRADEBOX_API_USER, TRADEBOX_API_PASS)
-    
-    try:
-        # Criar tasks para todas as ações
-        tasks = [get_aggregated_stock_data(symbol, auth) for symbol in B3_STOCKS]
-        
-        # Executar em paralelo
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Filtrar resultados válidos (não None e não Exception)
-        stocks_data = [
-            result for result in results 
-            if result is not None and not isinstance(result, Exception)
-        ]
-        
-        # Se não conseguiu nenhuma ação, usar fallback
-        if len(stocks_data) == 0:
-            print("[TRADEBOX] Nenhuma ação encontrada, usando fallback...")
-            stocks_data = generate_mock_stock_data()
-        else:
-            print(f"[TRADEBOX] ✅ {len(stocks_data)} ações carregadas com sucesso")
-        
-        # Atualizar cache
-        update_cache(stocks_data)
-        
-        return {
-            "stocks": stocks_data,
-            "timestamp": datetime.now().isoformat(),
-            "count": len(stocks_data),
-            "source": "tradebox_api",
-            "cache_ttl_seconds": stocks_cache["ttl"]
-        }
-        
-    except Exception as e:
-        print(f"[TRADEBOX ERROR] {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        # Usar fallback em caso de erro
-        stocks_data = generate_mock_stock_data()
-        update_cache(stocks_data)
-        
-        return {
-            "stocks": stocks_data,
-            "timestamp": datetime.now().isoformat(),
-            "count": len(stocks_data),
-            "source": "fallback",
-            "cache_ttl_seconds": stocks_cache["ttl"]
-        }
+    stocks_data, stored_at, from_cache, data_source = await get_cached_stocks_data()
+    age = cache_age_seconds(stored_at)
+
+    response = {
+        "stocks": stocks_data,
+        "timestamp": stored_at or current_iso_timestamp(),
+        "count": len(stocks_data),
+        "source": "cache" if from_cache else data_source,
+        "cache_ttl_seconds": STOCKS_CACHE_TTL
+    }
+
+    if from_cache:
+        response["cache_age_seconds"] = age
+
+    return response
+
 
 @app.get("/api/stocks/{symbol}")
 async def get_stock_detail(symbol: str):
@@ -723,12 +741,8 @@ async def get_portfolio_summary():
     Por enquanto, calcula baseado nas ações monitoradas (dados reais)
     """
     try:
-        # Buscar dados atuais
-        if not is_cache_valid():
-            stocks_data = fetch_real_stock_data()
-            update_cache(stocks_data)
-        else:
-            stocks_data = stocks_cache["data"]
+        # Buscar dados atuais (cache compartilhado)
+        stocks_data, _, _, _ = await get_cached_stocks_data()
         
         # Calcular valores (assumindo 100 ações de cada)
         shares_per_stock = 100
@@ -925,14 +939,14 @@ async def get_cached_analysis(symbol: str):
     Economiza tokens ao não gerar análise toda vez
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    cache_key = f"{symbol}_{today}"
+    cache_key = f"ai_analysis:{symbol.upper()}_{today}"
     
-    if cache_key in ai_analysis_cache:
-        cached = ai_analysis_cache[cache_key]
+    cached_entry = await cache.get(cache_key)
+    if cached_entry and cached_entry.get("analysis"):
         return {
             "cached": True,
-            "analysis": cached["analysis"],
-            "generated_at": cached["timestamp"].isoformat()
+            "analysis": cached_entry["analysis"],
+            "generated_at": cached_entry.get("timestamp")
         }
     
     return {
@@ -964,13 +978,18 @@ async def analyze_stock(request: AIAnalysisRequest):
     
     # Salvar em cache (por dia) - ESSENCIAL para economizar tokens!
     today = datetime.now().strftime("%Y-%m-%d")
-    cache_key = f"{request.symbol}_{today}"
-    ai_analysis_cache[cache_key] = {
-        "analysis": analysis,
-        "timestamp": datetime.now()
-    }
+    today = datetime.now().strftime("%Y-%m-%d")
+    cache_key = f"ai_analysis:{request.symbol.upper()}_{today}"
+    await cache.set(
+        cache_key,
+        {
+            "analysis": analysis,
+            "timestamp": current_iso_timestamp()
+        },
+        AI_ANALYSIS_CACHE_TTL
+    )
     
-    print(f"[AI CACHE] Análise TRIPLA gerada e armazenada: {cache_key}")
+    print(f"[AI CACHE] Analise TRIPLA gerada e armazenada: {cache_key}")
     
     return analysis
 
