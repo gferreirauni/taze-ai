@@ -118,9 +118,11 @@ def bundle_to_feature_rows(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
     if df.empty:
         return []
 
-    df["close_ma_9"] = df["close"].rolling(window=9).mean()
+    df["close_ma_20"] = df["close"].rolling(window=20).mean()
     df["close_ma_21"] = df["close"].rolling(window=21).mean()
     df["close_ma_50"] = df["close"].rolling(window=50).mean()
+    df["close_ma_200"] = df["close"].rolling(window=200).mean()
+    df["close_ma_200"] = df["close"].rolling(window=200).mean()
 
     df["close_ema_9"] = df["close"].ewm(span=9, adjust=False).mean()
     df["close_ema_21"] = df["close"].ewm(span=21, adjust=False).mean()

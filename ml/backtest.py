@@ -19,11 +19,34 @@ RESULTS_DIR = BASE_DIR / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 INITIAL_CAPITAL = 10_000.0
-BUY_THRESHOLD = 7.0
-SELL_THRESHOLD = 4.0
 BACKTEST_DAYS = 365 * 2  # ~2 anos
 MIN_RET = -0.15
 MAX_RET = 0.15
+RISK_LOW = 0.015
+RISK_HIGH = 0.035
+
+PROFILE_RULES = {
+    "Conservador": {
+        "buy": lambda score, risk_label: score > 8.5 and risk_label == "BAIXO",
+        "sell": lambda score, risk_label: score < 6.0,
+    },
+    "Moderado": {
+        "buy": lambda score, risk_label: score > 7.0,
+        "sell": lambda score, risk_label: score < 4.0,
+    },
+    "Agressivo": {
+        "buy": lambda score, risk_label: score > 6.0 or (score > 5.0 and risk_label == "ALTO"),
+        "sell": lambda score, risk_label: score < 3.5,
+    },
+}
+
+
+def classify_risk(value: float) -> str:
+    if value < RISK_LOW:
+        return "BAIXO"
+    if value < RISK_HIGH:
+        return "MODERADO"
+    return "ALTO"
 
 
 def load_model() -> Tuple[any, List[str]]:
@@ -77,7 +100,11 @@ def prediction_to_score(prediction: float, risk_value: float) -> float:
 
 
 def simulate_strategy(
-    df: pd.DataFrame, model, feature_names: List[str]
+    df: pd.DataFrame,
+    model,
+    feature_names: List[str],
+    buy_rule,
+    sell_rule,
 ) -> Tuple[List[float], List[float], List[float], List[pd.Timestamp]]:
     cash = INITIAL_CAPITAL
     shares = 0.0
@@ -99,14 +126,15 @@ def simulate_strategy(
         dates.append(row["date"])
         features = row.reindex(feature_names).astype(float).fillna(0.0).values.reshape(1, -1)
         raw_pred = float(model.predict(features)[0])
-        risk_value = float(row.get("volatility_30", 0.0))
+        risk_value = float(row.get("volatility_21", 0.0))
+        risk_label = classify_risk(risk_value)
         score = prediction_to_score(raw_pred, risk_value)
         scores.append(score)
 
-        if score > BUY_THRESHOLD and cash > 0:
+        if buy_rule(score, risk_label) and cash > 0:
             shares = cash / price
             cash = 0.0
-        elif score < SELL_THRESHOLD and shares > 0:
+        elif sell_rule(score, risk_label) and shares > 0:
             cash += shares * price
             shares = 0.0
 
@@ -135,8 +163,9 @@ def maybe_plot(symbol: str, dates: List[pd.Timestamp], strategy_curve: List[floa
 
 def run_backtest() -> None:
     model, feature_names = load_model()
-    total_alpha = 0.0
-    summaries: Dict[str, Dict[str, float]] = {}
+    profile_totals: Dict[str, Dict[str, float]] = {
+        name: {"alpha": 0.0, "count": 0.0} for name in PROFILE_RULES
+    }
 
     for symbol in settings.tickers:
         df = load_silver_frame(symbol)
@@ -145,35 +174,38 @@ def run_backtest() -> None:
         if missing_features:
             raise RuntimeError(f"{symbol}: dataset silver não possui colunas {missing_features}. Reingira os dados.")
 
-        strategy_curve, bh_curve, _, valid_dates = simulate_strategy(df, model, feature_names)
-        if not strategy_curve:
-            print(f"[BACKTEST] {symbol} sem dados válidos após filtros.")
-            continue
-        final_strategy = strategy_curve[-1]
-        final_bh = bh_curve[-1]
+        print(f"\n[BACKTEST] --- {symbol} ---")
+        for profile, rules in PROFILE_RULES.items():
+            strategy_curve, bh_curve, _, valid_dates = simulate_strategy(
+                df, model, feature_names, rules["buy"], rules["sell"]
+            )
+            if not strategy_curve:
+                print(f"[{profile}] Sem dados válidos para {symbol}.")
+                continue
 
-        perf_strategy = (final_strategy / INITIAL_CAPITAL - 1) * 100
-        perf_bh = (final_bh / INITIAL_CAPITAL - 1) * 100
-        alpha = perf_strategy - perf_bh
-        total_alpha += alpha
+            final_strategy = strategy_curve[-1]
+            final_bh = bh_curve[-1]
 
-        summaries[symbol] = {
-            "strategy_value": final_strategy,
-            "strategy_pct": perf_strategy,
-            "buyhold_value": final_bh,
-            "buyhold_pct": perf_bh,
-            "alpha_pct": alpha,
-        }
+            perf_strategy = (final_strategy / INITIAL_CAPITAL - 1) * 100
+            perf_bh = (final_bh / INITIAL_CAPITAL - 1) * 100
+            alpha = perf_strategy - perf_bh
 
-        print(f"[{symbol}] Resultado Taze AI: R$ {final_strategy:,.2f} ({perf_strategy:+.2f}%)")
-        print(f"[{symbol}] Resultado Buy&Hold: R$ {final_bh:,.2f} ({perf_bh:+.2f}%)")
-        trophy = " 🏆" if alpha > 0 else ""
-        print(f"[{symbol}] Alpha (Diferença): {alpha:+.2f}%{trophy}\n")
+            profile_totals[profile]["alpha"] += alpha
+            profile_totals[profile]["count"] += 1
 
-        maybe_plot(symbol, valid_dates, strategy_curve, bh_curve)
+            print(f"[{profile}] Carteira: R$ {final_strategy:,.2f} ({perf_strategy:+.2f}%)")
+            print(f"[{profile}] Buy&Hold: R$ {final_bh:,.2f} ({perf_bh:+.2f}%)")
+            trophy = " 🏆" if alpha > 0 else ""
+            print(f"[{profile}] Alpha: {alpha:+.2f}%{trophy}")
 
-    avg_alpha = total_alpha / len(summaries) if summaries else 0.0
-    print(f"[BACKTEST] Alpha médio na carteira monitorada: {avg_alpha:+.2f}%")
+            if profile == "Moderado":
+                maybe_plot(f"{symbol}-{profile}", valid_dates, strategy_curve, bh_curve)
+
+    print("\n[BACKTEST] ===== Resumo por Perfil =====")
+    for profile, stats in profile_totals.items():
+        count = stats["count"] or 1.0
+        avg_alpha = stats["alpha"] / count
+        print(f"{profile}: Alpha médio = {avg_alpha:+.2f}% (sobre {int(stats['count'])} ativos)")
 
 
 if __name__ == "__main__":
