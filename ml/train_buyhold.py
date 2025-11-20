@@ -46,11 +46,11 @@ def engineer_targets(df: pd.DataFrame, horizon_days: int = 90) -> Tuple[pd.DataF
 
 def train_model(X: pd.DataFrame, y: np.ndarray) -> XGBRegressor:
     model = XGBRegressor(
-        n_estimators=500,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        n_estimators=600,
+        max_depth=4,
+        learning_rate=0.03,
+        subsample=0.75,
+        colsample_bytree=0.75,
         objective="reg:squarederror",
         n_jobs=4,
     )
@@ -62,6 +62,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Treino do modelo Buy & Hold (score Warren)")
     parser.add_argument("--output", default="models/buyhold_xgb.pkl", help="Onde salvar o modelo treinado")
     parser.add_argument("--horizon-days", type=int, default=90, help="Horizonte de previsão em dias")
+    parser.add_argument(
+        "--train-until",
+        default="2022-12-31",
+        help="Data limite (YYYY-MM-DD) para treino. Dados posteriores são ignorados.",
+    )
     return parser.parse_args()
 
 
@@ -69,6 +74,12 @@ if __name__ == "__main__":
     args = parse_args()
     store = FeatureStore()
     df = store.load_silver_dataset()
+    df["date"] = pd.to_datetime(df["date"])
+    cutoff = pd.to_datetime(args.train_until)
+    print(f"[TRAIN] Datas disponíveis: {df['date'].min()} → {df['date'].max()}")
+    df = df[df["date"] <= cutoff].copy()
+    if df.empty:
+        raise SystemExit(f"Nenhum dado disponível até {args.train_until}. Rode ingest novamente ou ajuste o corte.")
 
     X, y = engineer_targets(df, horizon_days=args.horizon_days)
     print(f"[TRAIN] Dataset final: {X.shape[0]} linhas x {X.shape[1]} features")
@@ -86,6 +97,7 @@ if __name__ == "__main__":
             "rmse_in_sample": rmse,
             "horizon_days": args.horizon_days,
             "feature_count": X.shape[1],
+            "train_until": cutoff.strftime("%Y-%m-%d"),
         },
         output_path,
     )
