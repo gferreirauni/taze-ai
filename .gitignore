@@ -52,10 +52,3 @@ logs/
 *.egg-info/
 dist/
 build/
-
-# ML artifacts
-ml/data/bronze/
-ml/data/silver/
-ml/data/gold/
-ml/models/*.pkl
-models/
