@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime
+import time
 from typing import List
 
 from .config import settings
@@ -27,13 +28,10 @@ async def run_pipeline(tickers: List[str], range_days: int) -> None:
     client = TradeboxClient()
     store = FeatureStore()
 
-    sem = asyncio.Semaphore(settings.concurrent_requests)
-
-    async def bound_ingest(ticker: str) -> None:
-        async with sem:
-            await ingest_symbol(ticker, client, store, range_days)
-
-    await asyncio.gather(*[bound_ingest(ticker) for ticker in tickers])
+    for ticker in tickers:
+        await ingest_symbol(ticker, client, store, range_days)
+        print("⏳ Aguardando 2 segundos para não sobrecarregar a API...")
+        time.sleep(2)
 
 
 def parse_args() -> argparse.Namespace:

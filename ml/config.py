@@ -18,7 +18,14 @@ class Settings:
     tradebox_pass: str = field(default_factory=lambda: os.getenv("TRADEBOX_API_PASS", "TradeBoxAI@2025"))
     tradebox_base_url: str = field(default_factory=lambda: os.getenv("TRADEBOX_BASE_URL", "https://api.tradebox.com.br/v1"))
     tickers: List[str] = field(
-        default_factory=lambda: os.getenv("ML_TICKERS", "PETR4,BBAS3,VALE3,MGLU3,WEGE3").split(",")
+        default_factory=lambda: [
+            "VALE3", "PETR4", "ITUB4", "BBDC4", "BBAS3", "WEGE3",
+            "ABEV3", "JBSS3", "SUZB3", "PRIO3", "CSAN3",
+            "MGLU3", "LREN3", "VIIA3", "ASAI3", "CRFB3",
+            "ELET3", "CMIG4", "EGIE3", "CPLE6", "RAIZ4",
+            "B3SA3", "HAPV3", "RADL3", "RENT3", "CYRE3",
+            "GGBR4", "GOAU4", "CSNA3", "USIM5"
+        ]
     )
     history_range_days: int = int(os.getenv("ML_HISTORY_RANGE", "365"))
     concurrent_requests: int = int(os.getenv("ML_CONCURRENCY", "5"))

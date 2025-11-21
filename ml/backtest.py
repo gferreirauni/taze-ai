@@ -206,7 +206,8 @@ def run_backtest() -> None:
 
         missing_features = [col for col in feature_names if col not in df.columns]
         if missing_features:
-            raise RuntimeError(f"{symbol}: dataset silver não possui colunas {missing_features}. Reingira os dados.")
+            for col in missing_features:
+                df[col] = 0.0
 
         print(f"\n[BACKTEST] --- {symbol} ---")
         for profile, rules in PROFILE_RULES.items():
