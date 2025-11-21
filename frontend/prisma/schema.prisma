@@ -8,11 +8,16 @@ datasource db {
 }
 
 model Stock {
-  symbol    String   @id
-  name      String?
-  sector    String?
-  signals   Signal[]
-  createdAt DateTime @default(now())
+  symbol         String   @id
+  name           String?
+  sector         String?
+  segment        String?
+  documentNumber String?
+  homepage       String?
+  logoUrl        String?
+  signals        Signal[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model Signal {
@@ -20,16 +25,26 @@ model Signal {
   stockSymbol String
   stock       Stock    @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
 
-  price      Float
-  score      Float
-  status     String
-  rsi        Float?
-  volatility Float?
-  aiAnalysis String?  @db.Text
+  price       Float
+  score       Float
+  status      String
+  rsi         Float?
+  volatility  Float?
+  aiAnalysis  String?  @db.Text
+  intradayOpen   Float?
+  intradayClose  Float?
+  intradayHigh   Float?
+  intradayLow    Float?
+  intradayVolume Float?
+  intradayChange Float?
+  intradayPercent Float?
+  intradaySeries Json?
+  fundamentals  Json?
 
   analysisDate DateTime
   createdAt    DateTime @default(now())
 
   @@index([analysisDate])
   @@index([stockSymbol])
+  @@index([createdAt])
 }
