@@ -1,0 +1,272 @@
+[
+  {
+    "symbol": "VALE3",
+    "current_price": 65.02,
+    "score": 5.4,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "PETR4",
+    "current_price": 32.99,
+    "score": 5.4,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "ITUB4",
+    "current_price": 40.1,
+    "score": 5.3,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "BBDC4",
+    "current_price": 19.09,
+    "score": 5.3,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "BBAS3",
+    "current_price": 21.88,
+    "score": 5.3,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "WEGE3",
+    "current_price": 43.44,
+    "score": 5.0,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "ABEV3",
+    "current_price": 13.74,
+    "score": 5.5,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "JBSS3",
+    "current_price": 39.03,
+    "score": 5.3,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-07-04"
+  },
+  {
+    "symbol": "SUZB3",
+    "current_price": 48.53,
+    "score": 5.3,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "PRIO3",
+    "current_price": 40.04,
+    "score": 5.0,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CSAN3",
+    "current_price": 5.95,
+    "score": 7.0,
+    "status": "COMPRA",
+    "status_emoji": "🟢",
+    "msg": "Score alto. Avalie entrada conforme seu perfil.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "MGLU3",
+    "current_price": 9.47,
+    "score": 4.8,
+    "status": "NEUTRO",
+    "status_emoji": "🔴",
+    "msg": "Sem gatilhos relevantes. Continue monitorando.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "LREN3",
+    "current_price": 15.08,
+    "score": 5.7,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "BHIA3",
+    "current_price": 3.3,
+    "score": 9.2,
+    "status": "COMPRA",
+    "status_emoji": "🟢",
+    "msg": "Score alto. Avalie entrada conforme seu perfil.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "ASAI3",
+    "current_price": 9.52,
+    "score": 5.7,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CRFB3",
+    "current_price": 8.49,
+    "score": 5.9,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-06-27"
+  },
+  {
+    "symbol": "ELET3",
+    "current_price": 59.37,
+    "score": 2.0,
+    "status": "NEUTRO",
+    "status_emoji": "🔴",
+    "msg": "Sem gatilhos relevantes. Continue monitorando.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CMIG4",
+    "current_price": 11.46,
+    "score": 5.1,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "EGIE3",
+    "current_price": 43.23,
+    "score": 5.4,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CPLE6",
+    "current_price": 14.21,
+    "score": 5.5,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "RAIZ4",
+    "current_price": 0.85,
+    "score": 9.6,
+    "status": "COMPRA",
+    "status_emoji": "🟢",
+    "msg": "Score alto. Avalie entrada conforme seu perfil.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "B3SA3",
+    "current_price": 14.05,
+    "score": 5.0,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "HAPV3",
+    "current_price": 17.0,
+    "score": 7.9,
+    "status": "COMPRA",
+    "status_emoji": "🟢",
+    "msg": "Score alto. Avalie entrada conforme seu perfil.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "RADL3",
+    "current_price": 23.65,
+    "score": 4.9,
+    "status": "NEUTRO",
+    "status_emoji": "🔴",
+    "msg": "Sem gatilhos relevantes. Continue monitorando.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "RENT3",
+    "current_price": 43.0,
+    "score": 5.1,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CYRE3",
+    "current_price": 34.54,
+    "score": 4.9,
+    "status": "NEUTRO",
+    "status_emoji": "🔴",
+    "msg": "Sem gatilhos relevantes. Continue monitorando.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "GGBR4",
+    "current_price": 18.65,
+    "score": 5.1,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "GOAU4",
+    "current_price": 10.7,
+    "score": 5.5,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "CSNA3",
+    "current_price": 8.15,
+    "score": 5.4,
+    "status": "RADAR",
+    "status_emoji": "🟡",
+    "msg": "Ativo em aquecimento. Volume em linha e score crescente.",
+    "last_update": "2025-11-19"
+  },
+  {
+    "symbol": "USIM5",
+    "current_price": 5.2,
+    "score": 7.1,
+    "status": "COMPRA",
+    "status_emoji": "🟢",
+    "msg": "Score alto. Avalie entrada conforme seu perfil.",
+    "last_update": "2025-11-19"
+  }
+]

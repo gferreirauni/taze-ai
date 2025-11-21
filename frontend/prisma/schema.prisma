@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Stock {
+  symbol    String   @id
+  name      String?
+  sector    String?
+  signals   Signal[]
+  createdAt DateTime @default(now())
+}
+
+model Signal {
+  id          Int      @id @default(autoincrement())
+  stockSymbol String
+  stock       Stock    @relation(fields: [stockSymbol], references: [symbol], onDelete: Cascade)
+
+  price      Float
+  score      Float
+  status     String
+  rsi        Float?
+  volatility Float?
+  aiAnalysis String?  @db.Text
+
+  analysisDate DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([analysisDate])
+  @@index([stockSymbol])
+}

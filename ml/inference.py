@@ -10,6 +10,7 @@ import pandas as pd
 
 from .config import settings
 from .feature_store import FeatureStore
+from .db_client import save_signals
 
 MODEL_PATH = Path("ml/models/buyhold_xgb.pkl")
 MIN_RET = -0.15
@@ -100,9 +101,4 @@ def analyze_market(symbols: List[str]) -> List[Dict[str, object]]:
 if __name__ == "__main__":
     data = analyze_market(settings.tickers)
     print(json.dumps(data, indent=2, ensure_ascii=False))
-
-    output_path = Path("frontend/public/data/market_signals.json")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"[INFERENCE] JSON salvo em {output_path}")
+    save_signals(data)

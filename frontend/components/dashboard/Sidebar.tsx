@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Briefcase, TrendingUp, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Briefcase, TrendingUp, Settings, LogOut, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -9,6 +9,7 @@ const menuItems = [
   { icon: Briefcase, label: 'Carteira', href: '/carteira' },
   { icon: TrendingUp, label: 'Análises', href: '/analises' },
   { icon: Settings, label: 'Configurações', href: '/config' },
+  { icon: Shield, label: 'Admin Area', href: '/admin' },
 ]
 
 interface SidebarProps {
