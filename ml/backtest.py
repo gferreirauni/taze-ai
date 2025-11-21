@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 import joblib
 import numpy as np
@@ -28,11 +28,11 @@ RISK_HIGH = 0.035
 PROFILE_RULES = {
     "Conservador": {
         "buy": lambda score, risk_label: score > 8.5 and risk_label == "BAIXO",
-        "sell": lambda score, risk_label: score < 6.0,
+        "sell": lambda score, risk_label: score < 7.5,
     },
     "Moderado": {
         "buy": lambda score, risk_label: score > 7.0,
-        "sell": lambda score, risk_label: score < 4.0,
+        "sell": lambda score, risk_label: score < 5.0,
     },
     "Agressivo": {
         "buy": lambda score, risk_label: score > 6.0 or (score > 5.0 and risk_label == "ALTO"),
@@ -105,12 +105,21 @@ def simulate_strategy(
     feature_names: List[str],
     buy_rule,
     sell_rule,
-) -> Tuple[List[float], List[float], List[float], List[pd.Timestamp]]:
+) -> Tuple[List[float], List[float], List[float], List[pd.Timestamp], Dict[str, Any]]:
     cash = INITIAL_CAPITAL
     shares = 0.0
     equity_curve: List[float] = []
     scores: List[float] = []
     dates: List[pd.Timestamp] = []
+    trade_returns: List[float] = []
+    trade_durations: List[int] = []
+    total_trades = 0
+    winning_trades = 0
+    entry_date = None
+    entry_price = 0.0
+    max_score = float("-inf")
+    score_sum = 0.0
+    score_count = 0
 
     valid_prices = df[df["close"] > 0]
     if valid_prices.empty:
@@ -130,18 +139,43 @@ def simulate_strategy(
         risk_label = classify_risk(risk_value)
         score = prediction_to_score(raw_pred, risk_value)
         scores.append(score)
-
+        max_score = max(max_score, score)
+        score_sum += score
+        score_count += 1
         if buy_rule(score, risk_label) and cash > 0:
             shares = cash / price
             cash = 0.0
+            entry_price = price
+            entry_date = row["date"]
+            total_trades += 1
         elif sell_rule(score, risk_label) and shares > 0:
-            cash += shares * price
+            exit_value = shares * price
+            cost = shares * entry_price
+            cash += exit_value
+            trade_return = (exit_value - cost) / cost if cost > 0 else 0
+            trade_returns.append(trade_return)
+            if trade_return > 0:
+                winning_trades += 1
+            if entry_date is not None:
+                duration = (row["date"] - entry_date).days
+                trade_durations.append(max(duration, 1))
             shares = 0.0
+            entry_date = None
+            entry_price = 0.0
 
         equity_curve.append(cash + shares * price)
         bh_curve.append(bh_shares * price)
 
-    return equity_curve, bh_curve, scores, dates
+    stats = {
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "trade_returns": trade_returns,
+        "trade_durations": trade_durations,
+        "max_score": max_score if score_count else 0.0,
+        "avg_score": (score_sum / score_count) if score_count else 0.0,
+    }
+
+    return equity_curve, bh_curve, scores, dates, stats
 
 
 def maybe_plot(symbol: str, dates: List[pd.Timestamp], strategy_curve: List[float], bh_curve: List[float]) -> None:
@@ -176,7 +210,7 @@ def run_backtest() -> None:
 
         print(f"\n[BACKTEST] --- {symbol} ---")
         for profile, rules in PROFILE_RULES.items():
-            strategy_curve, bh_curve, _, valid_dates = simulate_strategy(
+            strategy_curve, bh_curve, _, valid_dates, stats = simulate_strategy(
                 df, model, feature_names, rules["buy"], rules["sell"]
             )
             if not strategy_curve:
@@ -193,10 +227,23 @@ def run_backtest() -> None:
             profile_totals[profile]["alpha"] += alpha
             profile_totals[profile]["count"] += 1
 
-            print(f"[{profile}] Carteira: R$ {final_strategy:,.2f} ({perf_strategy:+.2f}%)")
-            print(f"[{profile}] Buy&Hold: R$ {final_bh:,.2f} ({perf_bh:+.2f}%)")
-            trophy = " 🏆" if alpha > 0 else ""
-            print(f"[{profile}] Alpha: {alpha:+.2f}%{trophy}")
+            total_trades = stats["total_trades"]
+            winning_trades = stats["winning_trades"]
+            trade_returns = stats["trade_returns"]
+            trade_durations = stats["trade_durations"]
+            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+            avg_duration = np.mean(trade_durations) if trade_durations else 0.0
+            avg_trade_return = np.mean(trade_returns) * 100 if trade_returns else 0.0
+            max_score = stats["max_score"]
+            avg_score = stats["avg_score"]
+
+            summary = (
+                f"[{profile}] Carteira: R$ {final_strategy:,.2f} ({perf_strategy:+.2f}%) | "
+                f"Win Rate: {win_rate:.1f}% | Duração Média: {avg_duration:.1f} dias | "
+                f"Lucro Médio por Trade: {avg_trade_return:+.2f}% | "
+                f"Max Score: {max_score:.1f} | Avg Score: {avg_score:.1f}"
+            )
+            print(summary)
 
             if profile == "Moderado":
                 maybe_plot(f"{symbol}-{profile}", valid_dates, strategy_curve, bh_curve)

@@ -11,7 +11,7 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import make_scorer, mean_squared_error
 
 from .feature_store import FeatureStore
-from .train_buyhold import engineer_targets
+from .train_buyhold import engineer_targets  #
 
 try:
     from xgboost import XGBRegressor
@@ -38,14 +38,15 @@ def main() -> None:
     if df.empty:
         raise SystemExit("Dataset vazio após aplicar corte temporal. Rode ingest novamente ou ajuste o corte.")
 
-    X, y = engineer_targets(df)
+    # CORREÇÃO AQUI: Desempacotando os 4 valores retornados
+    X, y, features, dates = engineer_targets(df)
 
     param_grid: Dict[str, Any] = {
-        "n_estimators": [100, 500, 1000],
-        "max_depth": [3, 5, 7, 9],
-        "learning_rate": [0.01, 0.05, 0.1],
-        "subsample": [0.6, 0.8, 1.0],
-        "colsample_bytree": [0.6, 0.8, 1.0],
+        "n_estimators": [100, 500, 1000, 1500],
+        "max_depth": [3, 5, 6, 7, 9],
+        "learning_rate": [0.01, 0.03, 0.05, 0.1],
+        "subsample": [0.6, 0.7, 0.8, 1.0],
+        "colsample_bytree": [0.6, 0.7, 0.8, 1.0],
     }
 
     base_model = XGBRegressor(
@@ -63,7 +64,7 @@ def main() -> None:
         scoring=scorer,
         cv=args.cv,
         n_jobs=4,
-        verbose=2,
+        verbose=1,  # Reduzi um pouco o verbose para poluir menos o terminal
         random_state=42,
     )
 
@@ -71,7 +72,7 @@ def main() -> None:
     search.fit(X, y)
 
     best_model: XGBRegressor = search.best_estimator_
-    print("[OPTIMIZER] Melhores parâmetros encontrados:")
+    print("\n[OPTIMIZER] Melhores parâmetros encontrados:")
     for key, value in search.best_params_.items():
         print(f" - {key}: {value}")
     print(f"[OPTIMIZER] Score (neg MSE): {search.best_score_:.6f}")

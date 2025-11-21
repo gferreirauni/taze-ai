@@ -62,11 +62,11 @@ def engineer_targets(df: pd.DataFrame, horizon_days: int = 90) -> Tuple[pd.DataF
 
 def train_model(X: pd.DataFrame, y: np.ndarray) -> XGBRegressor:
     model = XGBRegressor(
-        n_estimators=500,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        n_estimators=100,
+        max_depth=7,
+        learning_rate=0.01,
+        subsample=1.0,
+        colsample_bytree=0.6,
         objective="reg:squarederror",
         n_jobs=-1,
         random_state=42
